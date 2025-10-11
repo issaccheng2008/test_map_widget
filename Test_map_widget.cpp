@@ -13,6 +13,11 @@
 // Other headers
 #include "Test_map_widget.h"
 
+// Qt headers
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QWidget>
+
 // C++ API headers
 #include "Map.h"
 #include "MapGraphicsView.h"
@@ -26,14 +31,28 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     // Create a map using the ArcGISImagery BasemapStyle
     m_map = new Map(BasemapStyle::ArcGISImagery, this);
 
-    // Create the Widget view
+    // Create the map view widget
     m_mapView = new MapGraphicsView(this);
 
     // Set map to map view
     m_mapView->setMap(m_map);
 
-    // set the mapView as the central widget
-    setCentralWidget(m_mapView);
+    // Create an exit button allowing the user to close the map window
+    m_exitButton = new QPushButton(tr("Exit Map"), this);
+    connect(m_exitButton, &QPushButton::clicked, this, &QWidget::close);
+
+    // Arrange the map view and button side by side
+    auto *layout = new QHBoxLayout();
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(m_mapView, /*stretch*/ 1);
+    layout->addWidget(m_exitButton);
+
+    // Create a central widget to host the layout
+    m_centralWidget = new QWidget(this);
+    m_centralWidget->setLayout(layout);
+
+    // Set the composed widget as the main window's central widget
+    setCentralWidget(m_centralWidget);
 }
 
 Test_map_widget::~Test_map_widget() = default;
