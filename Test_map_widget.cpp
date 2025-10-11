@@ -34,32 +34,35 @@ using namespace Esri::ArcGISRuntime;
 
 Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     : QMainWindow(parent)
-    , m_ui(std::make_unique<Ui::Test_map_widget>())
+    , ui(new Ui::Test_map_widget)
 {
-    m_ui->setupUi(this);
+    ui->setupUi(this);
 
     // Create a map using the ArcGISImagery BasemapStyle
     m_map = new Map(BasemapStyle::ArcGISImagery, this);
 
     // Create the map view widget
-    m_mapView = m_ui->mapView;
+    m_mapView = ui->mapView;
 
     // Set map to map view
     m_mapView->setMap(m_map);
 
-    connect(m_ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
+    connect(ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
     // Connect the exit button created in the UI to close the window
-    connect(m_ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
+    connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 }
 
-Test_map_widget::~Test_map_widget() = default;
+Test_map_widget::~Test_map_widget()
+{
+    delete ui;
+}
 
 void Test_map_widget::goToCoordinates()
 {
     if (!m_mapView)
         return;
 
-    const QString coordinateText = m_ui->coordinateInput->text().trimmed();
+    const QString coordinateText = ui->coordinateInput->text().trimmed();
     if (coordinateText.isEmpty()) {
         statusBar()->showMessage(tr("Enter coordinates as latitude, longitude."), 5000);
         return;
