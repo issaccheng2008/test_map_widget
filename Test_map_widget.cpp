@@ -14,45 +14,34 @@
 #include "Test_map_widget.h"
 
 // Qt headers
-#include <QHBoxLayout>
 #include <QPushButton>
-#include <QWidget>
 
 // C++ API headers
 #include "Map.h"
 #include "MapGraphicsView.h"
 #include "MapTypes.h"
 
+#include "ui_Test_map_widget.h"
+
 using namespace Esri::ArcGISRuntime;
 
 Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     : QMainWindow(parent)
+    , m_ui(std::make_unique<Ui::Test_map_widget>())
 {
+    m_ui->setupUi(this);
+
     // Create a map using the ArcGISImagery BasemapStyle
     m_map = new Map(BasemapStyle::ArcGISImagery, this);
 
     // Create the map view widget
-    m_mapView = new MapGraphicsView(this);
+    m_mapView = m_ui->mapView;
 
     // Set map to map view
     m_mapView->setMap(m_map);
 
-    // Create an exit button allowing the user to close the map window
-    m_exitButton = new QPushButton(tr("Exit Map"), this);
-    connect(m_exitButton, &QPushButton::clicked, this, &QWidget::close);
-
-    // Arrange the map view and button side by side
-    auto *layout = new QHBoxLayout();
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(m_mapView, /*stretch*/ 1);
-    layout->addWidget(m_exitButton);
-
-    // Create a central widget to host the layout
-    m_centralWidget = new QWidget(this);
-    m_centralWidget->setLayout(layout);
-
-    // Set the composed widget as the main window's central widget
-    setCentralWidget(m_centralWidget);
+    // Connect the exit button created in the UI to close the window
+    connect(m_ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 }
 
 Test_map_widget::~Test_map_widget() = default;
