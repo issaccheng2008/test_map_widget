@@ -26,16 +26,56 @@
      </widget>
     </item>
     <item>
-     <widget class="QPushButton" name="exitButton">
-      <property name="minimumSize">
-       <size>
-        <width>120</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="text">
-       <string>Exit Map</string>
-      </property>
+     <widget class="QWidget" name="sidePanel" native="true">
+      <layout class="QVBoxLayout" name="sideLayout">
+       <item>
+        <widget class="QLabel" name="coordinatesLabel">
+         <property name="text">
+          <string>Coordinates (lat, lon)</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="coordinateInput">
+         <property name="placeholderText">
+          <string>34.056, -117.195</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="goToCoordinateButton">
+         <property name="text">
+          <string>Go to location</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="sideSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="exitButton">
+         <property name="minimumSize">
+          <size>
+           <width>120</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Exit Map</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
    </layout>

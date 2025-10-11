@@ -33,7 +33,8 @@ public:
     explicit Test_map_widget(QWidget *parent = nullptr);
     ~Test_map_widget() override;
 
-public slots:
+private slots:
+    void goToCoordinates();
 
 private:
     Esri::ArcGISRuntime::Map *m_map = nullptr;
