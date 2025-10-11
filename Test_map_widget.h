@@ -20,8 +20,6 @@ class MapGraphicsView;
 
 #include <QMainWindow>
 
-#include <memory>
-
 namespace Ui {
 class Test_map_widget;
 }
@@ -39,7 +37,7 @@ private slots:
 private:
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
-    std::unique_ptr<Ui::Test_map_widget> m_ui;
+    Ui::Test_map_widget *ui = nullptr;
 };
 
 #endif // TEST_MAP_WIDGET_H
