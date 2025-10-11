@@ -1,0 +1,37 @@
+// Copyright 2025 ESRI
+//
+// All rights reserved under the copyright laws of the United States
+// and applicable international laws, treaties, and conventions.
+//
+// You may freely redistribute and use this sample code, with or
+// without modification, provided you include the original copyright
+// notice and use restrictions.
+//
+// See the Sample code usage restrictions document for further information.
+//
+
+#ifndef TEST_MAP_WIDGET_H
+#define TEST_MAP_WIDGET_H
+
+namespace Esri::ArcGISRuntime {
+class Map;
+class MapGraphicsView;
+} // namespace Esri::ArcGISRuntime
+
+#include <QMainWindow>
+
+class Test_map_widget : public QMainWindow
+{
+    Q_OBJECT
+public:
+    explicit Test_map_widget(QWidget *parent = nullptr);
+    ~Test_map_widget() override;
+
+public slots:
+
+private:
+    Esri::ArcGISRuntime::Map *m_map = nullptr;
+    Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
+};
+
+#endif // TEST_MAP_WIDGET_H
