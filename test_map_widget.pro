@@ -17,7 +17,7 @@ TEMPLATE = app
 CONFIG += c++17
 
 # additional modules are pulled in via arcgisruntime.pri
-QT += widgets
+QT += widgets concurrent
 
 lessThan(QT_MAJOR_VERSION, 6) {
     error("$$TARGET requires Qt 6.8.2")

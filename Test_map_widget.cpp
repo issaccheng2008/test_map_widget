@@ -14,6 +14,7 @@
 #include "Test_map_widget.h"
 
 // Qt headers
+#include <QFuture>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -26,8 +27,6 @@
 #include "MapTypes.h"
 #include "Point.h"
 #include "SpatialReference.h"
-
-#include "ui_Test_map_widget.h"
 
 #include "ui_Test_map_widget.h"
 
