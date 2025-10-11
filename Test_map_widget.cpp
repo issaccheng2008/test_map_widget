@@ -29,6 +29,8 @@
 
 #include "ui_Test_map_widget.h"
 
+#include "ui_Test_map_widget.h"
+
 using namespace Esri::ArcGISRuntime;
 
 Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
