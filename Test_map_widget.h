@@ -14,13 +14,13 @@
 #define TEST_MAP_WIDGET_H
 
 namespace Esri::ArcGISRuntime {
+class GraphicsOverlay;
 class Map;
 class MapGraphicsView;
+class Point;
 } // namespace Esri::ArcGISRuntime
 
 #include <QMainWindow>
-
-#include <memory>
 
 namespace Ui {
 class Test_map_widget;
@@ -35,11 +35,16 @@ public:
 
 private slots:
     void goToCoordinates();
+    void drawLineBetweenCoordinates();
 
 private:
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
-    std::unique_ptr<Ui::Test_map_widget> m_ui;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
+    Ui::Test_map_widget *ui = nullptr;
+
+    void drawLineBetweenPoints(const Esri::ArcGISRuntime::Point &start,
+                               const Esri::ArcGISRuntime::Point &end);
 };
 
 #endif // TEST_MAP_WIDGET_H
