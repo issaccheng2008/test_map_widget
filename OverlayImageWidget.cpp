@@ -10,6 +10,7 @@
 #include <QCursor>
 #include <QFont>
 #include <QtMath>
+#include <QTransform>
 
 #include <algorithm>
 #include <cmath>
@@ -188,6 +189,22 @@ void OverlayImageWidget::clearImage()
 bool OverlayImageWidget::hasImage() const
 {
     return m_pixmapItem != nullptr;
+}
+
+QPolygonF OverlayImageWidget::currentImageViewportPolygon() const
+{
+    if (!m_pixmapItem)
+        return {};
+
+    const QPolygonF scenePolygon = m_pixmapItem->mapToScene(m_pixmapItem->boundingRect());
+    QPolygonF viewportPolygon;
+    viewportPolygon.reserve(scenePolygon.size());
+
+    const QTransform transform = viewportTransform();
+    for (const QPointF &scenePoint : scenePolygon)
+        viewportPolygon << transform.map(scenePoint);
+
+    return viewportPolygon;
 }
 
 void OverlayImageWidget::resizeEvent(QResizeEvent *event)

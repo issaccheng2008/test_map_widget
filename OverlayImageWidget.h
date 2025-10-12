@@ -2,6 +2,7 @@
 #define OVERLAYIMAGEWIDGET_H
 
 #include <QGraphicsView>
+#include <QPolygonF>
 #include <QString>
 
 class QGraphicsPixmapItem;
@@ -18,6 +19,7 @@ public:
     [[nodiscard]] bool loadImage(const QString &filePath);
     void clearImage();
     [[nodiscard]] bool hasImage() const;
+    [[nodiscard]] QPolygonF currentImageViewportPolygon() const;
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
