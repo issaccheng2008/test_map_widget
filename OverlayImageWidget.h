@@ -20,6 +20,9 @@ public:
     void clearImage();
     [[nodiscard]] bool hasImage() const;
     [[nodiscard]] QPolygonF currentImageViewportPolygon() const;
+    void setPinnedMode(bool pinned);
+    [[nodiscard]] bool isPinned() const { return m_isPinned; }
+    void applyViewportPolygon(const QPolygonF &viewportPolygon);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -48,6 +51,7 @@ private:
     qreal m_rotationInitial = 0.0;
     qreal m_rotationStartAngle = 0.0;
     QPointF m_rotationCenter;
+    bool m_isPinned = false;
 };
 
 #endif // OVERLAYIMAGEWIDGET_H

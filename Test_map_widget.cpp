@@ -78,6 +78,10 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     // Set map to map view
     m_mapView->setMap(m_map);
 
+    connect(m_mapView, &MapGraphicsView::viewpointChanged, this, [this](auto &&...) {
+        updatePinnedImagePosition();
+    });
+
     // Prepare a graphics overlay for displaying dynamic shapes
     m_graphicsOverlay = new GraphicsOverlay(this);
     m_mapView->graphicsOverlays()->append(m_graphicsOverlay);
@@ -203,6 +207,7 @@ bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
         if (event->type() == QEvent::Resize) {
             if (m_imageOverlay)
                 m_imageOverlay->setGeometry(m_mapView->rect());
+            updatePinnedImagePosition();
         } else if (event->type() == QEvent::MouseButtonPress && m_isCapturingObstacle) {
             auto *mouseEvent = static_cast<QMouseEvent *>(event);
             if (mouseEvent->button() == Qt::RightButton) {
@@ -228,6 +233,9 @@ void Test_map_widget::importImage()
         return;
 
     if (m_imageOverlay->loadImage(filePath)) {
+        m_isImagePinned = false;
+        m_pinnedImageMapPoints.clear();
+        m_imageOverlay->setPinnedMode(false);
         const QFileInfo info(filePath);
         statusBar()->showMessage(tr("Loaded %1. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate.")
                                      .arg(info.fileName()),
@@ -244,6 +252,8 @@ void Test_map_widget::clearImportedImage()
 
     if (m_imageOverlay->hasImage()) {
         m_imageOverlay->clearImage();
+        m_isImagePinned = false;
+        m_pinnedImageMapPoints.clear();
         statusBar()->showMessage(tr("Image removed."), 5000);
     }
 }
@@ -284,20 +294,42 @@ void Test_map_widget::setImagePosition()
         return;
     }
 
-    PolygonBuilder builder(mapPoints.first().spatialReference());
-    for (const Point &point : mapPoints)
-        builder.addPoint(point);
+    if (mapPoints.size() > 1 && pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
+        mapPoints.removeLast();
 
-    if (!pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
-        builder.addPoint(mapPoints.first());
+    m_pinnedImageMapPoints = mapPoints;
+    m_isImagePinned = true;
+    m_imageOverlay->setPinnedMode(true);
+    updatePinnedImagePosition();
+    statusBar()->showMessage(tr("Image pinned to the map. It will follow as you move and zoom."), 5000);
+}
 
-    const QColor fillColor(0, 122, 204, 90);
-    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, nullptr, this);
-    auto *footprintGraphic = new Graphic(builder.toGeometry(), fillSymbol, this);
-    m_graphicsOverlay->graphics()->append(footprintGraphic);
+void Test_map_widget::updatePinnedImagePosition()
+{
+    if (!m_isImagePinned || !m_imageOverlay || !m_mapView)
+        return;
 
-    m_imageOverlay->clearImage();
-    statusBar()->showMessage(tr("Image replaced with map footprint."), 5000);
+    if (!m_imageOverlay->hasImage()) {
+        m_isImagePinned = false;
+        m_pinnedImageMapPoints.clear();
+        return;
+    }
+
+    if (m_pinnedImageMapPoints.size() < 3)
+        return;
+
+    QPolygonF viewportPolygon;
+    viewportPolygon.reserve(m_pinnedImageMapPoints.size());
+
+    for (const Point &mapPoint : m_pinnedImageMapPoints) {
+        const QPointF screenPoint = m_mapView->locationToScreen(mapPoint);
+        viewportPolygon << screenPoint;
+    }
+
+    if (viewportPolygon.size() < 3)
+        return;
+
+    m_imageOverlay->applyViewportPolygon(viewportPolygon);
 }
 
 void Test_map_widget::startObstacleCapture()
