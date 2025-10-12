@@ -16,6 +16,9 @@
 namespace Esri::ArcGISRuntime {
 class Map;
 class MapGraphicsView;
+class Graphic;
+class GraphicsOverlay;
+class Point;
 } // namespace Esri::ArcGISRuntime
 
 #include <QMainWindow>
@@ -33,10 +36,16 @@ public:
 
 private slots:
     void goToCoordinates();
+    void drawLineFromInput();
 
 private:
+    void drawLineBetweenPoints(const Esri::ArcGISRuntime::Point &start,
+                               const Esri::ArcGISRuntime::Point &end);
+
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
+    Esri::ArcGISRuntime::Graphic *m_routeGraphic = nullptr;
     Ui::Test_map_widget *ui = nullptr;
 };
 
