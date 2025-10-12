@@ -40,10 +40,12 @@ win32:CONFIG += \
 
 SOURCES += \
     main.cpp \
-    Test_map_widget.cpp
+    Test_map_widget.cpp \
+    OverlayImageWidget.cpp
 
 HEADERS += \
-    Test_map_widget.h
+    Test_map_widget.h \
+    OverlayImageWidget.h
 
 FORMS += \
     Test_map_widget.ui
