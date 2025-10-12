@@ -13,14 +13,19 @@
 // Other headers
 #include "Test_map_widget.h"
 
+#include "OverlayImageWidget.h"
+
 // Qt headers
 #include <QColor>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFuture>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QStringList>
+#include <QEvent>
 
 // Standard library
 #include <cmath>
@@ -60,6 +65,12 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     // Create the map view widget
     m_mapView = ui->mapView;
 
+    // Create the image overlay widget that sits on top of the map view
+    m_imageOverlay = new OverlayImageWidget(m_mapView);
+    m_imageOverlay->setObjectName(QStringLiteral("imageOverlay"));
+    m_imageOverlay->setGeometry(m_mapView->rect());
+    m_mapView->installEventFilter(this);
+
     // Set map to map view
     m_mapView->setMap(m_map);
 
@@ -68,6 +79,8 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     m_mapView->graphicsOverlays()->append(m_graphicsOverlay);
 
     connect(ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
+    connect(ui->importImageButton, &QPushButton::clicked, this, &Test_map_widget::importImage);
+    connect(ui->removeImageButton, &QPushButton::clicked, this, &Test_map_widget::clearImportedImage);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 }
@@ -166,4 +179,47 @@ void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point
 
     auto *rectangleGraphic = new Graphic(rectangleWgs84, fillSymbol, this);
     m_graphicsOverlay->graphics()->append(rectangleGraphic);
+}
+
+bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_mapView && event->type() == QEvent::Resize) {
+        if (m_imageOverlay)
+            m_imageOverlay->setGeometry(m_mapView->rect());
+    }
+
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void Test_map_widget::importImage()
+{
+    if (!m_imageOverlay)
+        return;
+
+    const QString filePath = QFileDialog::getOpenFileName(this,
+                                                         tr("Import image"),
+                                                         QString(),
+                                                         tr("Image Files (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff);;All Files (*)"));
+    if (filePath.isEmpty())
+        return;
+
+    if (m_imageOverlay->loadImage(filePath)) {
+        const QFileInfo info(filePath);
+        statusBar()->showMessage(tr("Loaded %1. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate.")
+                                     .arg(info.fileName()),
+                                 8000);
+    } else {
+        statusBar()->showMessage(tr("Failed to load image."), 5000);
+    }
+}
+
+void Test_map_widget::clearImportedImage()
+{
+    if (!m_imageOverlay)
+        return;
+
+    if (m_imageOverlay->hasImage()) {
+        m_imageOverlay->clearImage();
+        statusBar()->showMessage(tr("Image removed."), 5000);
+    }
 }
