@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace
 {
@@ -25,6 +26,7 @@ constexpr qreal kSceneExtent = 10000.0;
 constexpr qreal kHandleOffset = 30.0;
 constexpr qreal kHandleRadius = 14.0;
 constexpr qreal kHandleHoverRadius = 18.0;
+constexpr qreal kViewportMatchTolerance = 0.5;
 }
 
 class RotationHandle : public QGraphicsItem
@@ -145,6 +147,8 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     m_pixmapItem->setTransformOriginPoint(m_pixmapItem->boundingRect().center());
     m_pixmapItem->setAcceptedMouseButtons(Qt::NoButton);
 
+    m_isPinned = false;
+
     if (m_rotationHandle) {
         delete m_rotationHandle;
         m_rotationHandle = nullptr;
@@ -178,6 +182,7 @@ void OverlayImageWidget::clearImage()
         delete m_pixmapItem;
         m_pixmapItem = nullptr;
     }
+    m_isPinned = false;
     m_currentScale = 1.0;
     m_currentRotation = 0.0;
     m_isDragging = false;
@@ -294,12 +299,21 @@ void OverlayImageWidget::updateTransform()
     if (!m_pixmapItem)
         return;
 
+    if (m_isPinned)
+        return;
+
     m_pixmapItem->setScale(m_currentScale);
     m_pixmapItem->setRotation(m_currentRotation);
 }
 
 void OverlayImageWidget::updateMouseTransparency()
 {
+    if (m_isPinned) {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setVisible(hasImage());
+        return;
+    }
+
     const bool transparent = !hasImage();
     setAttribute(Qt::WA_TransparentForMouseEvents, transparent);
     setVisible(!transparent);
@@ -336,4 +350,78 @@ void OverlayImageWidget::updateRotationFromScenePos(const QPointF &scenePos)
 void OverlayImageWidget::endRotation()
 {
     m_isRotating = false;
+}
+
+void OverlayImageWidget::setPinnedMode(bool pinned)
+{
+    if (m_isPinned == pinned)
+        return;
+
+    m_isPinned = pinned;
+
+    if (m_pixmapItem) {
+        m_pixmapItem->setOpacity(pinned ? 0.5 : 1.0);
+        if (!pinned)
+            updateTransform();
+    }
+
+    if (m_rotationHandle)
+        m_rotationHandle->setVisible(!pinned);
+
+    if (pinned) {
+        m_isDragging = false;
+        m_isRotating = false;
+    }
+
+    updateMouseTransparency();
+    viewport()->update();
+}
+
+void OverlayImageWidget::applyViewportPolygon(const QPolygonF &viewportPolygon)
+{
+    if (!m_pixmapItem || viewportPolygon.size() < 3)
+        return;
+
+    QPolygonF uniquePoints;
+    uniquePoints.reserve(viewportPolygon.size());
+    const auto approximatelyEqual = [](const QPointF &a, const QPointF &b) {
+        return std::abs(a.x() - b.x()) <= kViewportMatchTolerance &&
+               std::abs(a.y() - b.y()) <= kViewportMatchTolerance;
+    };
+
+    for (const QPointF &point : viewportPolygon) {
+        if (!uniquePoints.isEmpty() && approximatelyEqual(uniquePoints.constLast(), point))
+            continue;
+        uniquePoints << point;
+    }
+
+    if (uniquePoints.size() > 1 && approximatelyEqual(uniquePoints.first(), uniquePoints.last()))
+        uniquePoints.removeLast();
+
+    if (uniquePoints.size() < 4)
+        return;
+
+    QPolygonF destination;
+    for (int i = 0; i < uniquePoints.size() && destination.size() < 4; ++i)
+        destination << uniquePoints.at(i);
+
+    if (destination.size() < 4)
+        return;
+
+    const QRectF rect = m_pixmapItem->boundingRect();
+    QPolygonF source;
+    source << rect.topLeft() << rect.topRight() << rect.bottomRight() << rect.bottomLeft();
+
+    const QTransform inverse = viewportTransform().inverted();
+    QPolygonF destinationScene;
+    destinationScene.reserve(destination.size());
+    for (const QPointF &point : std::as_const(destination))
+        destinationScene << inverse.map(point);
+
+    QTransform transform;
+    if (!QTransform::quadToQuad(source, destinationScene, transform))
+        return;
+
+    m_pixmapItem->setTransform(transform);
+    m_pixmapItem->setPos(0.0, 0.0);
 }

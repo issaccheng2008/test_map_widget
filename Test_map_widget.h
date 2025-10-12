@@ -63,6 +63,7 @@ private:
     void addObstaclePoint(const QPoint &screenPoint);
     void rebuildObstaclePreview();
     void resetObstacleCreationState(bool keepActive);
+    void updatePinnedImagePosition();
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
@@ -73,6 +74,8 @@ private:
 
     QList<Esri::ArcGISRuntime::Point> m_currentObstaclePoints;
     bool m_isCapturingObstacle = false;
+    QList<Esri::ArcGISRuntime::Point> m_pinnedImageMapPoints;
+    bool m_isImagePinned = false;
 
     Ui::Test_map_widget *ui = nullptr;
 };
