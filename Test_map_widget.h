@@ -22,6 +22,8 @@ class Point;
 
 #include <QMainWindow>
 
+class OverlayImageWidget;
+
 namespace Ui {
 class Test_map_widget;
 }
@@ -38,11 +40,16 @@ public:
 
 private slots:
     void goToCoordinates();
+    void importImage();
+    void clearImportedImage();
 
 private:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
+    OverlayImageWidget *m_imageOverlay = nullptr;
     Ui::Test_map_widget *ui = nullptr;
 };
 
