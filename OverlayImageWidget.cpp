@@ -142,6 +142,7 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     m_pixmapItem = m_scene->addPixmap(pixmap);
     m_pixmapItem->setTransformationMode(Qt::SmoothTransformation);
     m_pixmapItem->setTransformOriginPoint(m_pixmapItem->boundingRect().center());
+    m_pixmapItem->setAcceptedMouseButtons(Qt::NoButton);
 
     if (m_rotationHandle) {
         delete m_rotationHandle;
@@ -215,19 +216,40 @@ void OverlayImageWidget::wheelEvent(QWheelEvent *event)
 
 void OverlayImageWidget::mousePressEvent(QMouseEvent *event)
 {
-    if (!m_pixmapItem || event->button() != Qt::LeftButton || m_isRotating) {
+    if (!m_pixmapItem || m_isRotating) {
         QGraphicsView::mousePressEvent(event);
         return;
     }
 
+    QGraphicsView::mousePressEvent(event);
+    if (event->isAccepted())
+        return;
+
+    if (event->button() != Qt::LeftButton) {
+        event->ignore();
+        return;
+    }
+
+    const QPointF scenePos = mapToScene(event->pos());
+    const QPointF itemPos = m_pixmapItem->mapFromScene(scenePos);
+    if (!m_pixmapItem->contains(itemPos)) {
+        event->ignore();
+        return;
+    }
+
     m_isDragging = true;
-    m_lastMousePosition = mapToScene(event->pos());
+    m_lastMousePosition = scenePos;
     event->accept();
 }
 
 void OverlayImageWidget::mouseMoveEvent(QMouseEvent *event)
 {
-    if (!m_pixmapItem || !m_isDragging || m_isRotating) {
+    if (!m_pixmapItem || m_isRotating) {
+        QGraphicsView::mouseMoveEvent(event);
+        return;
+    }
+
+    if (!m_isDragging) {
         QGraphicsView::mouseMoveEvent(event);
         return;
     }
