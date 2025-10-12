@@ -12,6 +12,7 @@
 #include <QCursor>
 #include <QFont>
 #include <QtMath>
+#include <QWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -181,7 +182,14 @@ void OverlayImageWidget::clearImage()
         delete m_pixmapItem;
         m_pixmapItem = nullptr;
     }
+    const QRegion previousMask = m_lastMask;
     setMask(QRegion());
+    m_lastMask = QRegion();
+    if (!previousMask.isEmpty()) {
+        if (QWidget *parentWidget = parentWidget())
+            parentWidget->update(previousMask.translated(pos()));
+        viewport()->update(previousMask);
+    }
     m_currentScale = 1.0;
     m_currentRotation = 0.0;
     m_isDragging = false;
@@ -295,6 +303,12 @@ void OverlayImageWidget::updateMouseTransparency()
     setVisible(!transparent);
     if (transparent) {
         setMask(QRegion());
+        if (!m_lastMask.isEmpty()) {
+            if (QWidget *parentWidget = parentWidget())
+                parentWidget->update(m_lastMask.translated(pos()));
+            viewport()->update(m_lastMask);
+        }
+        m_lastMask = QRegion();
     }
 }
 
@@ -333,8 +347,16 @@ void OverlayImageWidget::endRotation()
 
 void OverlayImageWidget::updateInteractionRegion()
 {
+    const QRegion previousMask = m_lastMask;
+
     if (!m_pixmapItem) {
         setMask(QRegion());
+        if (!previousMask.isEmpty()) {
+            if (QWidget *parentWidget = parentWidget())
+                parentWidget->update(previousMask.translated(pos()));
+            viewport()->update(previousMask);
+        }
+        m_lastMask = QRegion();
         return;
     }
 
@@ -354,9 +376,27 @@ void OverlayImageWidget::updateInteractionRegion()
 
     if (path.isEmpty()) {
         setMask(QRegion());
+        if (!previousMask.isEmpty()) {
+            if (QWidget *parentWidget = parentWidget())
+                parentWidget->update(previousMask.translated(pos()));
+            viewport()->update(previousMask);
+        }
+        m_lastMask = QRegion();
         return;
     }
 
     const QRegion region(path.toFillPolygon().toPolygon());
     setMask(region);
+    m_lastMask = region;
+
+    if (region != previousMask) {
+        const QRegion uncovered = previousMask.subtracted(region);
+        if (!uncovered.isEmpty()) {
+            if (QWidget *parentWidget = parentWidget())
+                parentWidget->update(uncovered.translated(pos()));
+        }
+        viewport()->update(region.united(previousMask));
+    } else {
+        viewport()->update(region);
+    }
 }

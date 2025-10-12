@@ -2,6 +2,7 @@
 #define OVERLAYIMAGEWIDGET_H
 
 #include <QGraphicsView>
+#include <QRegion>
 #include <QString>
 
 class QGraphicsPixmapItem;
@@ -47,6 +48,7 @@ private:
     qreal m_rotationInitial = 0.0;
     qreal m_rotationStartAngle = 0.0;
     QPointF m_rotationCenter;
+    QRegion m_lastMask;
 };
 
 #endif // OVERLAYIMAGEWIDGET_H
