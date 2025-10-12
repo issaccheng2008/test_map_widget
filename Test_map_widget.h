@@ -16,6 +16,8 @@
 namespace Esri::ArcGISRuntime {
 class Map;
 class MapGraphicsView;
+class GraphicsOverlay;
+class Point;
 } // namespace Esri::ArcGISRuntime
 
 #include <QMainWindow>
@@ -31,12 +33,16 @@ public:
     explicit Test_map_widget(QWidget *parent = nullptr);
     ~Test_map_widget() override;
 
+    void drawLineBetweenCoordinates(const Esri::ArcGISRuntime::Point &start,
+                                    const Esri::ArcGISRuntime::Point &end);
+
 private slots:
     void goToCoordinates();
 
 private:
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
     Ui::Test_map_widget *ui = nullptr;
 };
 
