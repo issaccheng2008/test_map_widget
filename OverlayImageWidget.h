@@ -5,6 +5,9 @@
 #include <QString>
 
 class QGraphicsPixmapItem;
+class QGraphicsItem;
+
+class RotationHandle;
 
 class OverlayImageWidget : public QGraphicsView
 {
@@ -24,15 +27,25 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+    friend class RotationHandle;
+
     void updateTransform();
     void updateMouseTransparency();
+    void beginRotation(const QPointF &scenePos);
+    void updateRotationFromScenePos(const QPointF &scenePos);
+    void endRotation();
 
     QGraphicsScene *m_scene = nullptr;
     QGraphicsPixmapItem *m_pixmapItem = nullptr;
+    QGraphicsItem *m_rotationHandle = nullptr;
     QPointF m_lastMousePosition;
     bool m_isDragging = false;
+    bool m_isRotating = false;
     qreal m_currentScale = 1.0;
     qreal m_currentRotation = 0.0;
+    qreal m_rotationInitial = 0.0;
+    qreal m_rotationStartAngle = 0.0;
+    QPointF m_rotationCenter;
 };
 
 #endif // OVERLAYIMAGEWIDGET_H
