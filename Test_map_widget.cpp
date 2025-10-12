@@ -291,10 +291,8 @@ void Test_map_widget::setImagePosition()
     if (!pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
         builder.addPoint(mapPoints.first());
 
-    const QColor outlineColor(0, 122, 204);
     const QColor fillColor(0, 122, 204, 90);
-    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 2.0f, this);
-    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, nullptr, this);
     auto *footprintGraphic = new Graphic(builder.toGeometry(), fillSymbol, this);
     m_graphicsOverlay->graphics()->append(footprintGraphic);
 
@@ -324,10 +322,8 @@ void Test_map_widget::finishObstacleCapture()
     for (const auto &point : m_currentObstaclePoints)
         builder.addPoint(point);
 
-    const QColor outlineColor(255, 0, 0);
     const QColor fillColor(255, 0, 0, 100);
-    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 2.0f, this);
-    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, nullptr, this);
     auto *polygonGraphic = new Graphic(builder.toGeometry(), fillSymbol, this);
     m_obstacleOverlay->graphics()->append(polygonGraphic);
 
@@ -383,10 +379,8 @@ void Test_map_widget::rebuildObstaclePreview()
     for (const auto &point : m_currentObstaclePoints)
         builder.addPoint(point);
 
-    const QColor outlineColor(255, 0, 0);
     const QColor fillColor(255, 0, 0, 80);
-    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 2.0f, this);
-    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, nullptr, this);
     graphicsModel->append(new Graphic(builder.toGeometry(), fillSymbol, this));
 }
 
