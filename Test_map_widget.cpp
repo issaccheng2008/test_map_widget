@@ -22,31 +22,27 @@
 #include <QStatusBar>
 #include <QStringList>
 
+// Standard library
+#include <cmath>
+
 // C++ API headers
+#include "Geometry.h"
+#include "GeometryEngine.h"
 #include "Graphic.h"
 #include "GraphicsOverlay.h"
 #include "Map.h"
 #include "MapGraphicsView.h"
 #include "MapTypes.h"
 #include "Point.h"
-#include "PolylineBuilder.h"
-#include "SimpleLineSymbol.h"
-#include "SpatialReference.h"
-#include "GeometryEngine.h"
-#include "Geometry.h"
-
-
-
-#include "Graphic.h"
-#include "GraphicListModel.h"
-#include "GraphicsOverlay.h"
-#include "GraphicsOverlayListModel.h"
-#include "PolylineBuilder.h"
 #include "PolygonBuilder.h"
 #include "SimpleFillSymbol.h"
 #include "SimpleLineSymbol.h"
+#include "SpatialReference.h"
 #include "SimpleMarkerSymbol.h"
 #include "SymbolTypes.h"
+#include "PolylineBuilder.h"
+#include "GraphicListModel.h"
+#include "GraphicsOverlayListModel.h"
 
 #include "ui_Test_map_widget.h"
 
@@ -124,25 +120,50 @@ void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point
 {
     if (!m_graphicsOverlay)
         return;
-    SpatialReference spatialRef = start.spatialReference().isEmpty() ? start.spatialReference() : end.spatialReference();
-    if (!spatialRef.isEmpty())
-        spatialRef = SpatialReference::wgs84();
 
-    Point startPoint = start;
-    if (startPoint.spatialReference() != spatialRef)
-        startPoint = geometry_cast<Point>(GeometryEngine::project(startPoint, spatialRef));
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+    const SpatialReference webMercator = SpatialReference::webMercator();
 
-    Point endPoint = end;
-    if (endPoint.spatialReference() != spatialRef)
-        endPoint = geometry_cast<Point>(GeometryEngine::project(endPoint, spatialRef));
+    const auto normalizeToWgs84 = [&wgs84](const Point &point) {
+        if (point.spatialReference().isEmpty() || point.spatialReference() == wgs84)
+            return Point(point.x(), point.y(), wgs84);
+        return geometry_cast<Point>(GeometryEngine::project(point, wgs84));
+    };
 
-    PolylineBuilder builder(spatialRef);
-    builder.addPoint(startPoint);
-    builder.addPoint(endPoint);
+    const Point startWgs84 = normalizeToWgs84(start);
+    const Point endWgs84 = normalizeToWgs84(end);
 
-    const QColor lineColor(0, 0, 255, 127);
-    auto *lineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, lineColor, 1.5f, this);
+    const Point startWeb = geometry_cast<Point>(GeometryEngine::project(startWgs84, webMercator));
+    const Point endWeb = geometry_cast<Point>(GeometryEngine::project(endWgs84, webMercator));
 
-    Graphic *lineGraphic = new Graphic(builder.toGeometry(), lineSymbol, this);
-    m_graphicsOverlay->graphics()->append(lineGraphic);
+    const double dx = endWeb.x() - startWeb.x();
+    const double dy = endWeb.y() - startWeb.y();
+    const double length = std::hypot(dx, dy);
+    if (length == 0.0)
+        return;
+
+    constexpr double halfWidthMeters = 0.75; // Half of the 1.5 meter width
+    const double perpX = (-dy / length) * halfWidthMeters;
+    const double perpY = (dx / length) * halfWidthMeters;
+
+    const Point startTop(startWeb.x() + perpX, startWeb.y() + perpY, webMercator);
+    const Point endTop(endWeb.x() + perpX, endWeb.y() + perpY, webMercator);
+    const Point endBottom(endWeb.x() - perpX, endWeb.y() - perpY, webMercator);
+    const Point startBottom(startWeb.x() - perpX, startWeb.y() - perpY, webMercator);
+
+    PolygonBuilder builder(webMercator);
+    builder.addPoint(startTop);
+    builder.addPoint(endTop);
+    builder.addPoint(endBottom);
+    builder.addPoint(startBottom);
+
+    const Geometry rectangleWebMercator = builder.toGeometry();
+    const Geometry rectangleWgs84 = GeometryEngine::project(rectangleWebMercator, wgs84);
+
+    const QColor fillColor(0, 0, 255, 127);
+    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, fillColor, 0.0f, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+
+    auto *rectangleGraphic = new Graphic(rectangleWgs84, fillSymbol, this);
+    m_graphicsOverlay->graphics()->append(rectangleGraphic);
 }
