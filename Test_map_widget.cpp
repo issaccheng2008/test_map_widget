@@ -297,7 +297,7 @@ void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
     if (!m_isCapturingObstacle || !m_mapView)
         return;
 
-    const Point mapPoint = m_mapView->screenToLocation(screenPoint);
+    const Point mapPoint = m_mapView->screenToLocation(screenPoint.x(),screenPoint.y());
     m_currentObstaclePoints.append(mapPoint);
 
     rebuildObstaclePreview();
