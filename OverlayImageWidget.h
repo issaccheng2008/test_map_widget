@@ -31,6 +31,7 @@ private:
 
     void updateTransform();
     void updateMouseTransparency();
+    void updateInteractionRegion();
     void beginRotation(const QPointF &scenePos);
     void updateRotationFromScenePos(const QPointF &scenePos);
     void endRotation();

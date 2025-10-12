@@ -6,6 +6,8 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
+#include <QRegion>
 #include <QWheelEvent>
 #include <QCursor>
 #include <QFont>
@@ -160,6 +162,8 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     const QPointF itemCenter = m_pixmapItem->boundingRect().center();
     m_pixmapItem->setPos(viewCenter - itemCenter);
 
+    updateInteractionRegion();
+
     updateMouseTransparency();
     viewport()->update();
     show();
@@ -177,6 +181,7 @@ void OverlayImageWidget::clearImage()
         delete m_pixmapItem;
         m_pixmapItem = nullptr;
     }
+    setMask(QRegion());
     m_currentScale = 1.0;
     m_currentRotation = 0.0;
     m_isDragging = false;
@@ -258,6 +263,7 @@ void OverlayImageWidget::mouseMoveEvent(QMouseEvent *event)
     const QPointF delta = currentPosition - m_lastMousePosition;
     m_pixmapItem->setPos(m_pixmapItem->pos() + delta);
     m_lastMousePosition = currentPosition;
+    updateInteractionRegion();
     event->accept();
 }
 
@@ -279,6 +285,7 @@ void OverlayImageWidget::updateTransform()
 
     m_pixmapItem->setScale(m_currentScale);
     m_pixmapItem->setRotation(m_currentRotation);
+    updateInteractionRegion();
 }
 
 void OverlayImageWidget::updateMouseTransparency()
@@ -286,6 +293,9 @@ void OverlayImageWidget::updateMouseTransparency()
     const bool transparent = !hasImage();
     setAttribute(Qt::WA_TransparentForMouseEvents, transparent);
     setVisible(!transparent);
+    if (transparent) {
+        setMask(QRegion());
+    }
 }
 
 void OverlayImageWidget::beginRotation(const QPointF &scenePos)
@@ -319,4 +329,34 @@ void OverlayImageWidget::updateRotationFromScenePos(const QPointF &scenePos)
 void OverlayImageWidget::endRotation()
 {
     m_isRotating = false;
+}
+
+void OverlayImageWidget::updateInteractionRegion()
+{
+    if (!m_pixmapItem) {
+        setMask(QRegion());
+        return;
+    }
+
+    QPainterPath path;
+
+    const QPolygonF pixmapScene = m_pixmapItem->mapToScene(m_pixmapItem->boundingRect());
+    const QPolygon pixmapView = mapFromScene(pixmapScene);
+    if (!pixmapView.isEmpty())
+        path.addPolygon(pixmapView);
+
+    if (m_rotationHandle) {
+        const QPolygonF handleScene = m_rotationHandle->mapToScene(m_rotationHandle->boundingRect());
+        const QPolygon handleView = mapFromScene(handleScene);
+        if (!handleView.isEmpty())
+            path.addPolygon(handleView);
+    }
+
+    if (path.isEmpty()) {
+        setMask(QRegion());
+        return;
+    }
+
+    const QRegion region(path.toFillPolygon().toPolygon());
+    setMask(region);
 }
