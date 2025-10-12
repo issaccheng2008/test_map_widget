@@ -70,6 +70,16 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="setPositionButton">
+        <property name="text">
+         <string>Set Position</string>
+        </property>
+        <property name="toolTip">
+         <string>Replace the image with a map footprint</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="addObstacleButton">
         <property name="text">
          <string>Add Obstacle</string>

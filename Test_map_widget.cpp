@@ -22,6 +22,7 @@
 #include <QFuture>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QPolygonF>
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QStringList>
@@ -92,6 +93,7 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     connect(ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
     connect(ui->importImageButton, &QPushButton::clicked, this, &Test_map_widget::importImage);
     connect(ui->removeImageButton, &QPushButton::clicked, this, &Test_map_widget::clearImportedImage);
+    connect(ui->setPositionButton, &QPushButton::clicked, this, &Test_map_widget::setImagePosition);
     connect(ui->addObstacleButton, &QPushButton::clicked, this, &Test_map_widget::startObstacleCapture);
     connect(ui->finishObstacleButton, &QPushButton::clicked, this, &Test_map_widget::finishObstacleCapture);
     connect(ui->cancelObstacleButton, &QPushButton::clicked, this, &Test_map_widget::cancelObstacleCapture);
@@ -244,6 +246,60 @@ void Test_map_widget::clearImportedImage()
         m_imageOverlay->clearImage();
         statusBar()->showMessage(tr("Image removed."), 5000);
     }
+}
+
+void Test_map_widget::setImagePosition()
+{
+    if (!m_imageOverlay || !m_mapView || !m_graphicsOverlay)
+        return;
+
+    if (!m_imageOverlay->hasImage()) {
+        statusBar()->showMessage(tr("Import an image before setting its position."), 5000);
+        return;
+    }
+
+    const QPolygonF viewportPolygon = m_imageOverlay->currentImageViewportPolygon();
+    if (viewportPolygon.size() < 3) {
+        statusBar()->showMessage(tr("Unable to determine the image footprint."), 5000);
+        return;
+    }
+
+    QList<Point> mapPoints;
+    mapPoints.reserve(viewportPolygon.size());
+
+    const auto pointsApproximatelyEqual = [](const Point &a, const Point &b) {
+        constexpr double tolerance = 1e-6;
+        return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
+    };
+
+    for (const QPointF &screenPointF : viewportPolygon) {
+        const Point mapPoint = m_mapView->screenToLocation(screenPointF.x(), screenPointF.y());
+        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), mapPoint))
+            continue;
+        mapPoints.append(mapPoint);
+    }
+
+    if (mapPoints.size() < 3) {
+        statusBar()->showMessage(tr("Unable to determine the image footprint."), 5000);
+        return;
+    }
+
+    PolygonBuilder builder(mapPoints.first().spatialReference());
+    for (const Point &point : mapPoints)
+        builder.addPoint(point);
+
+    if (!pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
+        builder.addPoint(mapPoints.first());
+
+    const QColor outlineColor(0, 122, 204);
+    const QColor fillColor(0, 122, 204, 90);
+    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 2.0f, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+    auto *footprintGraphic = new Graphic(builder.toGeometry(), fillSymbol, this);
+    m_graphicsOverlay->graphics()->append(footprintGraphic);
+
+    m_imageOverlay->clearImage();
+    statusBar()->showMessage(tr("Image replaced with map footprint."), 5000);
 }
 
 void Test_map_widget::startObstacleCapture()

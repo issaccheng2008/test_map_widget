@@ -52,6 +52,7 @@ private slots:
     void goToCoordinates();
     void importImage();
     void clearImportedImage();
+    void setImagePosition();
     void startObstacleCapture();
     void finishObstacleCapture();
     void cancelObstacleCapture();
