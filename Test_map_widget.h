@@ -21,12 +21,22 @@ class Point;
 } // namespace Esri::ArcGISRuntime
 
 #include <QMainWindow>
+#include <QList>
+#include <QPoint>
 
 class OverlayImageWidget;
 
 namespace Ui {
 class Test_map_widget;
 }
+
+
+struct obstacles
+{
+    QList<Esri::ArcGISRuntime::Point> vertices;
+};
+
+extern QList<obstacles> obstaclesList;
 
 class Test_map_widget : public QMainWindow
 {
@@ -42,14 +52,27 @@ private slots:
     void goToCoordinates();
     void importImage();
     void clearImportedImage();
+    void startObstacleCapture();
+    void finishObstacleCapture();
+    void cancelObstacleCapture();
 
 private:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
+    void addObstaclePoint(const QPoint &screenPoint);
+    void rebuildObstaclePreview();
+    void resetObstacleCreationState(bool keepActive);
+
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_obstacleOverlay = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_obstacleEditingOverlay = nullptr;
     OverlayImageWidget *m_imageOverlay = nullptr;
+
+    QList<Esri::ArcGISRuntime::Point> m_currentObstaclePoints;
+    bool m_isCapturingObstacle = false;
+
     Ui::Test_map_widget *ui = nullptr;
 };
 
