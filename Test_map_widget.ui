@@ -70,6 +70,27 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="addObstacleButton">
+        <property name="text">
+         <string>Add Obstacle</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="finishObstacleButton">
+        <property name="text">
+         <string>Finish</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="cancelObstacleButton">
+        <property name="text">
+         <string>Cancel</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="sideSpacer">
         <property name="orientation">
          <enum>Qt::Vertical</enum>

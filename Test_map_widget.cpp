@@ -26,6 +26,7 @@
 #include <QStatusBar>
 #include <QStringList>
 #include <QEvent>
+#include <QMouseEvent>
 
 // Standard library
 #include <cmath>
@@ -50,6 +51,8 @@
 #include "GraphicsOverlayListModel.h"
 
 #include "ui_Test_map_widget.h"
+
+QList<obstacles> obstaclesList;
 
 using namespace Esri::ArcGISRuntime;
 
@@ -78,9 +81,20 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     m_graphicsOverlay = new GraphicsOverlay(this);
     m_mapView->graphicsOverlays()->append(m_graphicsOverlay);
 
+    m_obstacleOverlay = new GraphicsOverlay(this);
+    m_mapView->graphicsOverlays()->append(m_obstacleOverlay);
+
+    m_obstacleEditingOverlay = new GraphicsOverlay(this);
+    m_mapView->graphicsOverlays()->append(m_obstacleEditingOverlay);
+
+    ui->finishObstacleButton->setEnabled(false);
+
     connect(ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
     connect(ui->importImageButton, &QPushButton::clicked, this, &Test_map_widget::importImage);
     connect(ui->removeImageButton, &QPushButton::clicked, this, &Test_map_widget::clearImportedImage);
+    connect(ui->addObstacleButton, &QPushButton::clicked, this, &Test_map_widget::startObstacleCapture);
+    connect(ui->finishObstacleButton, &QPushButton::clicked, this, &Test_map_widget::finishObstacleCapture);
+    connect(ui->cancelObstacleButton, &QPushButton::clicked, this, &Test_map_widget::cancelObstacleCapture);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 }
@@ -183,9 +197,17 @@ void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point
 
 bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == m_mapView && event->type() == QEvent::Resize) {
-        if (m_imageOverlay)
-            m_imageOverlay->setGeometry(m_mapView->rect());
+    if (watched == m_mapView) {
+        if (event->type() == QEvent::Resize) {
+            if (m_imageOverlay)
+                m_imageOverlay->setGeometry(m_mapView->rect());
+        } else if (event->type() == QEvent::MouseButtonPress && m_isCapturingObstacle) {
+            auto *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (mouseEvent->button() == Qt::RightButton) {
+                addObstaclePoint(mouseEvent->pos());
+                return true;
+            }
+        }
     }
 
     return QMainWindow::eventFilter(watched, event);
@@ -222,4 +244,106 @@ void Test_map_widget::clearImportedImage()
         m_imageOverlay->clearImage();
         statusBar()->showMessage(tr("Image removed."), 5000);
     }
+}
+
+void Test_map_widget::startObstacleCapture()
+{
+    resetObstacleCreationState(true);
+    m_isCapturingObstacle = true;
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Right-click on the map to add obstacle vertices."), 5000);
+}
+
+void Test_map_widget::finishObstacleCapture()
+{
+    if (!m_isCapturingObstacle || m_currentObstaclePoints.size() < 3 || !m_obstacleOverlay)
+        return;
+
+    obstacles newObstacle;
+    newObstacle.vertices = m_currentObstaclePoints;
+    obstaclesList.append(newObstacle);
+
+    PolygonBuilder builder(m_currentObstaclePoints.first().spatialReference());
+    for (const auto &point : m_currentObstaclePoints)
+        builder.addPoint(point);
+
+    const QColor outlineColor(255, 0, 0);
+    const QColor fillColor(255, 0, 0, 100);
+    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 2.0f, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+    auto *polygonGraphic = new Graphic(builder.toGeometry(), fillSymbol, this);
+    m_obstacleOverlay->graphics()->append(polygonGraphic);
+
+    resetObstacleCreationState(false);
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Obstacle saved."), 5000);
+}
+
+void Test_map_widget::cancelObstacleCapture()
+{
+    if (!m_isCapturingObstacle && m_currentObstaclePoints.isEmpty())
+        return;
+
+    resetObstacleCreationState(false);
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Obstacle creation canceled."), 5000);
+}
+
+void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
+{
+    if (!m_isCapturingObstacle || !m_mapView)
+        return;
+
+    const Point mapPoint = m_mapView->screenToLocation(screenPoint);
+    m_currentObstaclePoints.append(mapPoint);
+
+    rebuildObstaclePreview();
+
+    if (ui && ui->finishObstacleButton)
+        ui->finishObstacleButton->setEnabled(m_currentObstaclePoints.size() >= 3);
+}
+
+void Test_map_widget::rebuildObstaclePreview()
+{
+    if (!m_obstacleEditingOverlay)
+        return;
+
+    auto *graphicsModel = m_obstacleEditingOverlay->graphics();
+    graphicsModel->clear();
+
+    const QColor markerColor(255, 0, 0);
+    for (const auto &point : m_currentObstaclePoints) {
+        auto *markerSymbol = new SimpleMarkerSymbol(SimpleMarkerSymbolStyle::Circle, markerColor, 8.0f, this);
+        graphicsModel->append(new Graphic(point, markerSymbol, this));
+    }
+
+    if (m_currentObstaclePoints.size() < 3)
+        return;
+
+    PolygonBuilder builder(m_currentObstaclePoints.first().spatialReference());
+    for (const auto &point : m_currentObstaclePoints)
+        builder.addPoint(point);
+
+    const QColor outlineColor(255, 0, 0);
+    const QColor fillColor(255, 0, 0, 80);
+    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 2.0f, this);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+    graphicsModel->append(new Graphic(builder.toGeometry(), fillSymbol, this));
+}
+
+void Test_map_widget::resetObstacleCreationState(bool keepActive)
+{
+    if (!keepActive)
+        m_isCapturingObstacle = false;
+
+    m_currentObstaclePoints.clear();
+
+    if (m_obstacleEditingOverlay)
+        m_obstacleEditingOverlay->graphics()->clear();
+
+    if (ui && ui->finishObstacleButton)
+        ui->finishObstacleButton->setEnabled(false);
 }
