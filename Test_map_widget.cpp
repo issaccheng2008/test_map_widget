@@ -76,6 +76,8 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     m_imageOverlay->setGeometry(m_mapView->rect());
     m_mapView->installEventFilter(this);
 
+    connect(m_imageOverlay, &OverlayImageWidget::interactiveTransformChanged, this, &Test_map_widget::updateUiState);
+
     // Set map to map view
     m_mapView->setMap(m_map);
 

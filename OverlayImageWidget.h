@@ -26,6 +26,9 @@ public:
     void applyViewportPolygon(const QPolygonF &viewportPolygon);
     [[nodiscard]] QPixmap currentPixmap() const;
 
+signals:
+    void interactiveTransformChanged();
+
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;

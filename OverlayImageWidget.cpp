@@ -310,8 +310,17 @@ void OverlayImageWidget::updateTransform()
     if (m_isPinned)
         return;
 
+    const qreal previousScale = m_pixmapItem->scale();
+    const qreal previousRotation = m_pixmapItem->rotation();
+
     m_pixmapItem->setScale(m_currentScale);
     m_pixmapItem->setRotation(m_currentRotation);
+
+    constexpr qreal epsilon = 1e-6;
+    if (std::abs(previousScale - m_pixmapItem->scale()) > epsilon ||
+        std::abs(previousRotation - m_pixmapItem->rotation()) > epsilon) {
+        emit interactiveTransformChanged();
+    }
 }
 
 void OverlayImageWidget::updateMouseTransparency()
