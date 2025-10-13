@@ -220,6 +220,25 @@ QPixmap OverlayImageWidget::currentPixmap() const
     return m_pixmapItem->pixmap();
 }
 
+void OverlayImageWidget::setCurrentPixmap(const QPixmap &pixmap)
+{
+    if (!m_pixmapItem || pixmap.isNull())
+        return;
+
+    m_pixmapItem->setPixmap(pixmap);
+    m_pixmapItem->setTransformOriginPoint(m_pixmapItem->boundingRect().center());
+
+    if (m_rotationHandle) {
+        const QRectF rect = m_pixmapItem->boundingRect();
+        m_rotationHandle->setPos(rect.center().x(), rect.top() - kHandleOffset);
+    }
+
+    if (!m_isPinned)
+        updateTransform();
+
+    viewport()->update();
+}
+
 void OverlayImageWidget::resizeEvent(QResizeEvent *event)
 {
     QGraphicsView::resizeEvent(event);
