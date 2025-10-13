@@ -357,12 +357,27 @@ void OverlayImageWidget::setPinnedMode(bool pinned)
     if (m_isPinned == pinned)
         return;
 
+    if (pinned) {
+        m_savedScaleBeforePin = m_currentScale;
+        m_savedRotationBeforePin = m_currentRotation;
+    }
+
     m_isPinned = pinned;
 
     if (m_pixmapItem) {
-        m_pixmapItem->setOpacity(pinned ? 0.5 : 1.0);
-        if (!pinned)
+        if (pinned) {
+            m_pixmapItem->setTransform(QTransform());
+            m_pixmapItem->setScale(1.0);
+            m_pixmapItem->setRotation(0.0);
+            m_currentScale = 1.0;
+            m_currentRotation = 0.0;
+        } else {
+            m_pixmapItem->setTransform(QTransform());
+            m_currentScale = m_savedScaleBeforePin;
+            m_currentRotation = m_savedRotationBeforePin;
             updateTransform();
+        }
+        m_pixmapItem->setOpacity(pinned ? 0.5 : 1.0);
     }
 
     if (m_rotationHandle)
