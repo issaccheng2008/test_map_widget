@@ -23,8 +23,13 @@ class Point;
 #include <QMainWindow>
 #include <QList>
 #include <QPoint>
+#include <QPointer>
+
+#include <optional>
+#include <utility>
 
 class OverlayImageWidget;
+class GridPreviewWindow;
 
 namespace Ui {
 class Test_map_widget;
@@ -53,6 +58,7 @@ private slots:
     void importImage();
     void clearImportedImage();
     void setImagePosition();
+    void openGridPreview();
     void startObstacleCapture();
     void finishObstacleCapture();
     void cancelObstacleCapture();
@@ -64,6 +70,11 @@ private:
     void rebuildObstaclePreview();
     void resetObstacleCreationState(bool keepActive);
     void updatePinnedImagePosition();
+    void updateUiState();
+    std::optional<QList<Esri::ArcGISRuntime::Point>> mapPointsForCurrentImageViewport() const;
+    std::optional<double> currentImageAreaSquareMeters() const;
+    bool isCurrentImageAreaAcceptable() const;
+    std::optional<std::pair<double, double>> pinnedImageDimensionsMeters() const;
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
@@ -76,6 +87,7 @@ private:
     bool m_isCapturingObstacle = false;
     QList<Esri::ArcGISRuntime::Point> m_pinnedImageMapPoints;
     bool m_isImagePinned = false;
+    QPointer<GridPreviewWindow> m_gridWindow;
 
     Ui::Test_map_widget *ui = nullptr;
 };

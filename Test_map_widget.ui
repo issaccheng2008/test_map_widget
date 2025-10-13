@@ -62,10 +62,13 @@
       <item>
        <widget class="QPushButton" name="removeImageButton">
         <property name="text">
-         <string>Remove Image</string>
+         <string>Close Image</string>
         </property>
         <property name="toolTip">
          <string>Hide the currently imported image</string>
+        </property>
+        <property name="enabled">
+         <bool>false</bool>
         </property>
        </widget>
       </item>
@@ -76,6 +79,22 @@
         </property>
         <property name="toolTip">
          <string>Replace the image with a map footprint</string>
+        </property>
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="openGridButton">
+        <property name="text">
+         <string>Show Grid Window</string>
+        </property>
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Open a new window with a gridded view of the pinned image</string>
         </property>
        </widget>
       </item>
