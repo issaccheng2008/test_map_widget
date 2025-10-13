@@ -14,6 +14,7 @@
 #include "Test_map_widget.h"
 
 #include "OverlayImageWidget.h"
+#include "GridPreviewWindow.h"
 
 // Qt headers
 #include <QColor>
@@ -80,6 +81,7 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
 
     connect(m_mapView, &MapGraphicsView::viewpointChanged, this, [this](auto &&...) {
         updatePinnedImagePosition();
+        updateUiState();
     });
 
     // Prepare a graphics overlay for displaying dynamic shapes
@@ -98,11 +100,14 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     connect(ui->importImageButton, &QPushButton::clicked, this, &Test_map_widget::importImage);
     connect(ui->removeImageButton, &QPushButton::clicked, this, &Test_map_widget::clearImportedImage);
     connect(ui->setPositionButton, &QPushButton::clicked, this, &Test_map_widget::setImagePosition);
+    connect(ui->openGridButton, &QPushButton::clicked, this, &Test_map_widget::openGridPreview);
     connect(ui->addObstacleButton, &QPushButton::clicked, this, &Test_map_widget::startObstacleCapture);
     connect(ui->finishObstacleButton, &QPushButton::clicked, this, &Test_map_widget::finishObstacleCapture);
     connect(ui->cancelObstacleButton, &QPushButton::clicked, this, &Test_map_widget::cancelObstacleCapture);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
+
+    updateUiState();
 }
 
 Test_map_widget::~Test_map_widget()
@@ -208,6 +213,7 @@ bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
             if (m_imageOverlay)
                 m_imageOverlay->setGeometry(m_mapView->rect());
             updatePinnedImagePosition();
+            updateUiState();
         } else if (event->type() == QEvent::MouseButtonPress && m_isCapturingObstacle) {
             auto *mouseEvent = static_cast<QMouseEvent *>(event);
             if (mouseEvent->button() == Qt::RightButton) {
@@ -240,8 +246,10 @@ void Test_map_widget::importImage()
         statusBar()->showMessage(tr("Loaded %1. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate.")
                                      .arg(info.fileName()),
                                  8000);
+        updateUiState();
     } else {
         statusBar()->showMessage(tr("Failed to load image."), 5000);
+        updateUiState();
     }
 }
 
@@ -254,8 +262,12 @@ void Test_map_widget::clearImportedImage()
         m_imageOverlay->clearImage();
         m_isImagePinned = false;
         m_pinnedImageMapPoints.clear();
+        if (m_gridWindow)
+            m_gridWindow->close();
         statusBar()->showMessage(tr("Image removed."), 5000);
     }
+
+    updateUiState();
 }
 
 void Test_map_widget::setImagePosition()
@@ -268,40 +280,25 @@ void Test_map_widget::setImagePosition()
         return;
     }
 
-    const QPolygonF viewportPolygon = m_imageOverlay->currentImageViewportPolygon();
-    if (viewportPolygon.size() < 3) {
+    if (!isCurrentImageAreaAcceptable()) {
+        statusBar()->showMessage(tr("The image footprint is too large to pin."), 5000);
+        return;
+    }
+
+    const auto mapPointsOptional = mapPointsForCurrentImageViewport();
+    if (!mapPointsOptional) {
         statusBar()->showMessage(tr("Unable to determine the image footprint."), 5000);
         return;
     }
 
-    QList<Point> mapPoints;
-    mapPoints.reserve(viewportPolygon.size());
-
-    const auto pointsApproximatelyEqual = [](const Point &a, const Point &b) {
-        constexpr double tolerance = 1e-6;
-        return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
-    };
-
-    for (const QPointF &screenPointF : viewportPolygon) {
-        const Point mapPoint = m_mapView->screenToLocation(screenPointF.x(), screenPointF.y());
-        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), mapPoint))
-            continue;
-        mapPoints.append(mapPoint);
-    }
-
-    if (mapPoints.size() < 3) {
-        statusBar()->showMessage(tr("Unable to determine the image footprint."), 5000);
-        return;
-    }
-
-    if (mapPoints.size() > 1 && pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
-        mapPoints.removeLast();
+    const QList<Point> mapPoints = mapPointsOptional.value();
 
     m_pinnedImageMapPoints = mapPoints;
     m_isImagePinned = true;
     m_imageOverlay->setPinnedMode(true);
     updatePinnedImagePosition();
     statusBar()->showMessage(tr("Image pinned to the map. It will follow as you move and zoom."), 5000);
+    updateUiState();
 }
 
 void Test_map_widget::updatePinnedImagePosition()
@@ -312,6 +309,7 @@ void Test_map_widget::updatePinnedImagePosition()
     if (!m_imageOverlay->hasImage()) {
         m_isImagePinned = false;
         m_pinnedImageMapPoints.clear();
+        updateUiState();
         return;
     }
 
@@ -330,6 +328,147 @@ void Test_map_widget::updatePinnedImagePosition()
         return;
 
     m_imageOverlay->applyViewportPolygon(viewportPolygon);
+}
+
+void Test_map_widget::openGridPreview()
+{
+    if (!m_imageOverlay || !m_imageOverlay->hasImage() || !m_isImagePinned)
+        return;
+
+    const auto dimensions = pinnedImageDimensionsMeters();
+    if (!dimensions) {
+        statusBar()->showMessage(tr("Unable to determine the pinned image dimensions."), 5000);
+        return;
+    }
+
+    const QPixmap pixmap = m_imageOverlay->currentPixmap();
+    if (pixmap.isNull()) {
+        statusBar()->showMessage(tr("Unable to load the pinned image preview."), 5000);
+        return;
+    }
+
+    if (!m_gridWindow) {
+        m_gridWindow = new GridPreviewWindow(this);
+        m_gridWindow->setAttribute(Qt::WA_DeleteOnClose, true);
+        connect(m_gridWindow, &QObject::destroyed, this, [this]() { m_gridWindow = nullptr; });
+    }
+
+    m_gridWindow->setImageWithGrid(pixmap, dimensions->first, dimensions->second);
+    m_gridWindow->show();
+    m_gridWindow->raise();
+    m_gridWindow->activateWindow();
+}
+
+void Test_map_widget::updateUiState()
+{
+    const bool hasImage = m_imageOverlay && m_imageOverlay->hasImage();
+
+    if (ui->importImageButton)
+        ui->importImageButton->setEnabled(!hasImage);
+
+    if (ui->removeImageButton)
+        ui->removeImageButton->setEnabled(hasImage);
+
+    const bool areaAcceptable = hasImage && isCurrentImageAreaAcceptable();
+    if (ui->setPositionButton)
+        ui->setPositionButton->setEnabled(areaAcceptable);
+
+    const bool hasPinnedImage = hasImage && m_isImagePinned && m_imageOverlay && m_imageOverlay->isPinned();
+    if (ui->openGridButton)
+        ui->openGridButton->setEnabled(hasPinnedImage);
+}
+
+std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() const
+{
+    if (!m_imageOverlay || !m_mapView || !m_imageOverlay->hasImage())
+        return std::nullopt;
+
+    const QPolygonF viewportPolygon = m_imageOverlay->currentImageViewportPolygon();
+    if (viewportPolygon.size() < 3)
+        return std::nullopt;
+
+    QList<Point> mapPoints;
+    mapPoints.reserve(viewportPolygon.size());
+
+    const auto pointsApproximatelyEqual = [](const Point &a, const Point &b) {
+        constexpr double tolerance = 1e-6;
+        return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
+    };
+
+    for (const QPointF &screenPointF : viewportPolygon) {
+        const Point mapPoint = m_mapView->screenToLocation(screenPointF.x(), screenPointF.y());
+        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), mapPoint))
+            continue;
+        mapPoints.append(mapPoint);
+    }
+
+    if (mapPoints.size() > 1 && pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
+        mapPoints.removeLast();
+
+    if (mapPoints.size() < 3)
+        return std::nullopt;
+
+    return mapPoints;
+}
+
+std::optional<double> Test_map_widget::currentImageAreaSquareMeters() const
+{
+    const auto mapPointsOptional = mapPointsForCurrentImageViewport();
+    if (!mapPointsOptional || mapPointsOptional->size() < 3)
+        return std::nullopt;
+
+    const SpatialReference targetReference = SpatialReference::webMercator();
+    PolygonBuilder builder(targetReference);
+
+    for (const Point &point : mapPointsOptional.value()) {
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != targetReference)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, targetReference));
+        builder.addPoint(projectedPoint);
+    }
+
+    const Geometry polygon = builder.toGeometry();
+    const double area = std::abs(GeometryEngine::area(polygon));
+    if (!std::isfinite(area) || area <= 0.0)
+        return std::nullopt;
+
+    return area;
+}
+
+bool Test_map_widget::isCurrentImageAreaAcceptable() const
+{
+    constexpr double kMaxAreaSquareMeters = 10000.0;
+    const auto areaOptional = currentImageAreaSquareMeters();
+    return areaOptional && *areaOptional < kMaxAreaSquareMeters;
+}
+
+std::optional<std::pair<double, double>> Test_map_widget::pinnedImageDimensionsMeters() const
+{
+    if (!m_isImagePinned || m_pinnedImageMapPoints.size() < 4)
+        return std::nullopt;
+
+    const int pointCount = m_pinnedImageMapPoints.size();
+    if (pointCount < 4)
+        return std::nullopt;
+
+    const SpatialReference targetReference = SpatialReference::webMercator();
+    const auto projectPoint = [&targetReference](const Point &point) {
+        if (point.spatialReference().isEmpty() || point.spatialReference() != targetReference)
+            return geometry_cast<Point>(GeometryEngine::project(point, targetReference));
+        return point;
+    };
+
+    const Point p0 = projectPoint(m_pinnedImageMapPoints.at(0));
+    const Point p1 = projectPoint(m_pinnedImageMapPoints.at(1 % pointCount));
+    const Point p2 = projectPoint(m_pinnedImageMapPoints.at(2 % pointCount));
+
+    const double widthMeters = GeometryEngine::distance(p0, p1);
+    const double heightMeters = GeometryEngine::distance(p1, p2);
+
+    if (!std::isfinite(widthMeters) || !std::isfinite(heightMeters) || widthMeters <= 0.0 || heightMeters <= 0.0)
+        return std::nullopt;
+
+    return std::make_pair(widthMeters, heightMeters);
 }
 
 void Test_map_widget::startObstacleCapture()

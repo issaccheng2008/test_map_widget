@@ -212,6 +212,14 @@ QPolygonF OverlayImageWidget::currentImageViewportPolygon() const
     return viewportPolygon;
 }
 
+QPixmap OverlayImageWidget::currentPixmap() const
+{
+    if (!m_pixmapItem)
+        return {};
+
+    return m_pixmapItem->pixmap();
+}
+
 void OverlayImageWidget::resizeEvent(QResizeEvent *event)
 {
     QGraphicsView::resizeEvent(event);
