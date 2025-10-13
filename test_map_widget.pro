@@ -41,11 +41,13 @@ win32:CONFIG += \
 SOURCES += \
     main.cpp \
     Test_map_widget.cpp \
-    OverlayImageWidget.cpp
+    OverlayImageWidget.cpp \
+    GridPreviewWindow.cpp
 
 HEADERS += \
     Test_map_widget.h \
-    OverlayImageWidget.h
+    OverlayImageWidget.h \
+    GridPreviewWindow.h
 
 FORMS += \
     Test_map_widget.ui

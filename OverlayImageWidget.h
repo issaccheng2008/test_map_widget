@@ -4,6 +4,7 @@
 #include <QGraphicsView>
 #include <QPolygonF>
 #include <QString>
+#include <QPixmap>
 
 class QGraphicsPixmapItem;
 class QGraphicsItem;
@@ -23,6 +24,10 @@ public:
     void setPinnedMode(bool pinned);
     [[nodiscard]] bool isPinned() const { return m_isPinned; }
     void applyViewportPolygon(const QPolygonF &viewportPolygon);
+    [[nodiscard]] QPixmap currentPixmap() const;
+
+signals:
+    void interactiveTransformChanged();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
