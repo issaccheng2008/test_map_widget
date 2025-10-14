@@ -233,6 +233,18 @@ void Test_map_widget::importImage()
     if (!m_imageOverlay)
         return;
 
+    const bool hasImage = m_imageOverlay->hasImage();
+    const bool imagePinned = hasImage && m_isImagePinned && m_imageOverlay->isPinned();
+
+    if (imagePinned) {
+        m_isImagePinned = false;
+        m_imageOverlay->setPinnedMode(false);
+        statusBar()->showMessage(tr("Image unlocked. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate."),
+                                 8000);
+        updateUiState();
+        return;
+    }
+
     const QString filePath = QFileDialog::getOpenFileName(this,
                                                          tr("Import image"),
                                                          QString(),
@@ -379,18 +391,31 @@ void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap)
 void Test_map_widget::updateUiState()
 {
     const bool hasImage = m_imageOverlay && m_imageOverlay->hasImage();
+    const bool hasPinnedImage = hasImage && m_isImagePinned && m_imageOverlay && m_imageOverlay->isPinned();
 
-    if (ui->importImageButton)
-        ui->importImageButton->setEnabled(!hasImage);
+    if (ui->importImageButton) {
+        if (!hasImage) {
+            ui->importImageButton->setText(tr("Load Image"));
+            ui->importImageButton->setToolTip(tr("Select an image to display on top of the map"));
+            ui->importImageButton->setEnabled(true);
+        } else if (hasPinnedImage) {
+            ui->importImageButton->setText(tr("Modify Position"));
+            ui->importImageButton->setToolTip(tr("Return the pinned image to modify mode"));
+            ui->importImageButton->setEnabled(true);
+        } else {
+            ui->importImageButton->setText(tr("Modify Position"));
+            ui->importImageButton->setToolTip(tr("The image can already be dragged and rotated."));
+            ui->importImageButton->setEnabled(false);
+        }
+    }
 
     if (ui->removeImageButton)
         ui->removeImageButton->setEnabled(hasImage);
 
-    const bool areaAcceptable = hasImage && isCurrentImageAreaAcceptable();
+    const bool areaAcceptable = hasImage && !hasPinnedImage && isCurrentImageAreaAcceptable();
     if (ui->setPositionButton)
         ui->setPositionButton->setEnabled(areaAcceptable);
 
-    const bool hasPinnedImage = hasImage && m_isImagePinned && m_imageOverlay && m_imageOverlay->isPinned();
     if (ui->openGridButton)
         ui->openGridButton->setEnabled(hasPinnedImage);
 }

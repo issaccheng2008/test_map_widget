@@ -52,7 +52,7 @@
       <item>
        <widget class="QPushButton" name="importImageButton">
         <property name="text">
-         <string>Import Image</string>
+         <string>Load Image</string>
         </property>
         <property name="toolTip">
          <string>Select an image to display on top of the map</string>
