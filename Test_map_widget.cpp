@@ -353,12 +353,27 @@ void Test_map_widget::openGridPreview()
         m_gridWindow = new GridPreviewWindow(this);
         m_gridWindow->setAttribute(Qt::WA_DeleteOnClose, true);
         connect(m_gridWindow, &QObject::destroyed, this, [this]() { m_gridWindow = nullptr; });
+        connect(m_gridWindow, &GridPreviewWindow::effectCommitted, this,
+                &Test_map_widget::applyCommittedGridEffect);
     }
 
     m_gridWindow->setImageWithGrid(pixmap, dimensions->first, dimensions->second);
     m_gridWindow->show();
     m_gridWindow->raise();
     m_gridWindow->activateWindow();
+}
+
+void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap)
+{
+    if (!m_imageOverlay || pixmap.isNull())
+        return;
+
+    m_imageOverlay->setCurrentPixmap(pixmap);
+    if (m_isImagePinned)
+        updatePinnedImagePosition();
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Grid effect applied to the pinned image."), 5000);
 }
 
 void Test_map_widget::updateUiState()

@@ -25,6 +25,7 @@ public:
     [[nodiscard]] bool isPinned() const { return m_isPinned; }
     void applyViewportPolygon(const QPolygonF &viewportPolygon);
     [[nodiscard]] QPixmap currentPixmap() const;
+    void setCurrentPixmap(const QPixmap &pixmap);
 
 signals:
     void interactiveTransformChanged();
