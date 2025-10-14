@@ -14,6 +14,7 @@
 #include <QPalette>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QStringList>
@@ -49,7 +50,7 @@ private:
     void setupUi()
     {
         auto *mainLayout = new QGridLayout(this);
-        mainLayout->setContentsMargins(6, 6, 6, 6);
+        mainLayout->setContentsMargins(6, 6, 18, 6);
         mainLayout->setHorizontalSpacing(8);
         mainLayout->setVerticalSpacing(4);
         mainLayout->setColumnStretch(1, 1);
@@ -66,7 +67,6 @@ private:
         m_seedColorPreview = new QLabel(this);
         m_seedColorPreview->setFixedSize(32, 20);
         m_seedColorPreview->setFrameShape(QFrame::Box);
-        m_seedColorPreview->setAutoFillBackground(true);
 
         auto *channelLabel = new QLabel(QStringLiteral("Channel"), this);
         m_channelCombo = new QComboBox(this);
@@ -81,7 +81,6 @@ private:
         m_targetColorPreview = new QLabel(this);
         m_targetColorPreview->setFixedSize(32, 20);
         m_targetColorPreview->setFrameShape(QFrame::Box);
-        m_targetColorPreview->setAutoFillBackground(true);
 
         auto *targetWeightLabel = new QLabel(QStringLiteral("Target weight"), this);
         m_targetWeightEdit = new QLineEdit(this);
@@ -100,10 +99,10 @@ private:
         mainLayout->addWidget(targetWeightLabel, 4, 0);
         mainLayout->addWidget(m_targetWeightEdit, 4, 1, 1, 3);
 
-        connect(m_seedColorEdit, &QLineEdit::editingFinished, this, [this]() {
+        connect(m_seedColorEdit, &QLineEdit::textChanged, this, [this]() {
             updateColorPreview(m_seedColorEdit->text(), m_seedColorPreview);
         });
-        connect(m_targetColorEdit, &QLineEdit::editingFinished, this, [this]() {
+        connect(m_targetColorEdit, &QLineEdit::textChanged, this, [this]() {
             updateColorPreview(m_targetColorEdit->text(), m_targetColorPreview);
         });
 
@@ -145,9 +144,24 @@ private:
 
         bool ok = false;
         const QColor color = parseColorString(text, &ok);
-        QPalette palette = preview->palette();
-        palette.setColor(QPalette::Window, ok ? color : QColor(255, 255, 255));
-        preview->setPalette(palette);
+        const QSize previewSize = preview->size();
+        if (!previewSize.isValid())
+            return;
+
+        QPixmap pixmap(previewSize);
+        if (ok) {
+            pixmap.fill(color);
+        } else {
+            pixmap.fill(Qt::white);
+            QPainter painter(&pixmap);
+            QPen pen(Qt::black);
+            pen.setWidth(2);
+            painter.setPen(pen);
+            painter.drawLine(QPointF(0.0, previewSize.height()), QPointF(previewSize.width(), 0.0));
+            painter.end();
+        }
+
+        preview->setPixmap(pixmap);
         preview->setToolTip(ok ? color.name() : QStringLiteral("Enter RGB as R,G,B"));
     }
 
@@ -181,6 +195,8 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
 
     m_seedListWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_seedListWidget->setSpacing(4);
+    m_seedListWidget->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    m_seedListWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     auto *mainLayout = new QVBoxLayout(this);
     auto *contentLayout = new QHBoxLayout();
@@ -192,11 +208,11 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     seedButtonLayout->addWidget(m_addSeedButton);
     seedButtonLayout->addWidget(m_deleteSeedButton);
     sideLayout->addLayout(seedButtonLayout);
-    sideLayout->addWidget(m_seedListWidget, 1);
-    sideLayout->addStretch(1);
+    sideLayout->addWidget(m_seedListWidget);
+    sideLayout->setStretch(3, 1);
 
-    contentLayout->addWidget(m_scrollArea, 1);
-    contentLayout->addLayout(sideLayout);
+    contentLayout->addWidget(m_scrollArea, 2);
+    contentLayout->addLayout(sideLayout, 1);
 
     auto *bottomLayout = new QHBoxLayout();
     bottomLayout->addStretch(1);
