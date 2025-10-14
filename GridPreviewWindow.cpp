@@ -157,59 +157,20 @@ bool GridPreviewWindow::ensureEffectPixmaps()
     if (sourceImage.width() < cropWidth || sourceImage.height() < cropHeight)
         return false;
 
-    QImage effectImage(cropWidth, cropHeight, QImage::Format_ARGB32);
-    effectImage.fill(Qt::transparent);
+    QImage cropped = sourceImage.copy(0, 0, cropWidth, cropHeight);
+    if (cropped.isNull())
+        return false;
 
-    QPainter painter(&effectImage);
-    painter.setPen(Qt::NoPen);
+    QImage reduced = cropped.scaled(columns, rows, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    if (reduced.isNull())
+        return false;
 
-    const int pixelsPerCell = m_cellWidthPx * m_cellHeightPx;
+    QImage effectImage = reduced.scaled(cropWidth, cropHeight, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    if (effectImage.isNull())
+        return false;
 
-    for (int row = 0; row < rows; ++row) {
-        const int yStart = row * m_cellHeightPx;
-        for (int column = 0; column < columns; ++column) {
-            const int xStart = column * m_cellWidthPx;
-
-            quint64 sumRed = 0;
-            quint64 sumGreen = 0;
-            quint64 sumBlue = 0;
-            quint64 sumAlpha = 0;
-
-            for (int y = 0; y < m_cellHeightPx; ++y) {
-                const QRgb *line = reinterpret_cast<const QRgb *>(sourceImage.constScanLine(yStart + y));
-                for (int x = 0; x < m_cellWidthPx; ++x) {
-                    const QRgb pixel = line[xStart + x];
-                    const int alpha = qAlpha(pixel);
-                    sumAlpha += alpha;
-                    sumRed += static_cast<quint64>(qRed(pixel)) * alpha;
-                    sumGreen += static_cast<quint64>(qGreen(pixel)) * alpha;
-                    sumBlue += static_cast<quint64>(qBlue(pixel)) * alpha;
-                }
-            }
-
-            int averageAlpha = pixelsPerCell > 0 ? static_cast<int>(sumAlpha / pixelsPerCell) : 0;
-            averageAlpha = std::clamp(averageAlpha, 0, 255);
-
-            int averageRed = 0;
-            int averageGreen = 0;
-            int averageBlue = 0;
-
-            if (sumAlpha > 0) {
-                averageRed = static_cast<int>(sumRed / sumAlpha);
-                averageGreen = static_cast<int>(sumGreen / sumAlpha);
-                averageBlue = static_cast<int>(sumBlue / sumAlpha);
-            }
-
-            averageRed = std::clamp(averageRed, 0, 255);
-            averageGreen = std::clamp(averageGreen, 0, 255);
-            averageBlue = std::clamp(averageBlue, 0, 255);
-
-            painter.setBrush(QColor(averageRed, averageGreen, averageBlue, averageAlpha));
-            painter.drawRect(QRect(xStart, yStart, m_cellWidthPx, m_cellHeightPx));
-        }
-    }
-
-    painter.end();
+    if (effectImage.format() != QImage::Format_ARGB32)
+        effectImage = effectImage.convertToFormat(QImage::Format_ARGB32);
 
     m_effectPixmap = QPixmap::fromImage(effectImage);
     m_effectWithGridPixmap = drawGridLines(m_effectPixmap);
