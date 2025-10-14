@@ -393,6 +393,14 @@ void OverlayImageWidget::setPinnedMode(bool pinned)
     if (m_isPinned == pinned)
         return;
 
+    QPointF desiredSceneCenter;
+    bool shouldRestorePosition = false;
+
+    if (!pinned && m_pixmapItem) {
+        desiredSceneCenter = m_pixmapItem->sceneBoundingRect().center();
+        shouldRestorePosition = true;
+    }
+
     if (pinned) {
         m_savedScaleBeforePin = m_currentScale;
         m_savedRotationBeforePin = m_currentRotation;
@@ -412,6 +420,16 @@ void OverlayImageWidget::setPinnedMode(bool pinned)
             m_currentScale = m_savedScaleBeforePin;
             m_currentRotation = m_savedRotationBeforePin;
             updateTransform();
+
+            if (shouldRestorePosition) {
+                const QPointF currentSceneCenter =
+                    m_pixmapItem->mapToScene(m_pixmapItem->boundingRect().center());
+                const QPointF delta = desiredSceneCenter - currentSceneCenter;
+                if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y())) {
+                    m_pixmapItem->setPos(m_pixmapItem->pos() + delta);
+                    emit interactiveTransformChanged();
+                }
+            }
         }
         m_pixmapItem->setOpacity(pinned ? 0.5 : 1.0);
     }
