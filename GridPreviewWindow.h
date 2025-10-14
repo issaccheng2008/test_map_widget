@@ -7,6 +7,7 @@
 class QLabel;
 class QScrollArea;
 class QPushButton;
+class QListWidget;
 
 class GridPreviewWindow : public QDialog
 {
@@ -24,6 +25,10 @@ private:
     QPixmap drawGridLines(const QPixmap &base) const;
     bool ensureEffectPixmaps();
     void updateButtonStates();
+    void updateSeedItemNumbers();
+
+    void handleAddSeedClicked();
+    void handleDeleteSeedClicked();
 
     void handleSeeEffectClicked();
     void handleToggleGridLinesClicked();
@@ -34,6 +39,9 @@ private:
     QPushButton *m_seeEffectButton = nullptr;
     QPushButton *m_toggleGridLinesButton = nullptr;
     QPushButton *m_commitButton = nullptr;
+    QPushButton *m_addSeedButton = nullptr;
+    QPushButton *m_deleteSeedButton = nullptr;
+    QListWidget *m_seedListWidget = nullptr;
 
     QPixmap m_originalPixmap;
     QPixmap m_originalWithGridPixmap;
