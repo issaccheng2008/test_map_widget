@@ -11,6 +11,7 @@
 #include <QListWidget>
 #include <QPainter>
 #include <QPen>
+#include <QPalette>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
