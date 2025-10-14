@@ -395,10 +395,14 @@ void OverlayImageWidget::setPinnedMode(bool pinned)
 
     QPointF desiredSceneCenter;
     bool shouldRestorePosition = false;
+    QTransform previousTransform;
+    bool hasPreviousTransform = false;
 
     if (!pinned && m_pixmapItem) {
         desiredSceneCenter = m_pixmapItem->sceneBoundingRect().center();
         shouldRestorePosition = true;
+        previousTransform = m_pixmapItem->transform();
+        hasPreviousTransform = true;
     }
 
     if (pinned) {
@@ -416,9 +420,31 @@ void OverlayImageWidget::setPinnedMode(bool pinned)
             m_currentScale = 1.0;
             m_currentRotation = 0.0;
         } else {
+            qreal restoredScale = m_savedScaleBeforePin;
+            qreal restoredRotation = m_savedRotationBeforePin;
+
+            if (hasPreviousTransform) {
+                const qreal scaleX = std::hypot(previousTransform.m11(), previousTransform.m21());
+                const qreal scaleY = std::hypot(previousTransform.m12(), previousTransform.m22());
+
+                qreal derivedScale = restoredScale;
+                if (!qFuzzyIsNull(scaleX) && !qFuzzyIsNull(scaleY)) {
+                    derivedScale = (scaleX + scaleY) / 2.0;
+                } else if (!qFuzzyIsNull(scaleX)) {
+                    derivedScale = scaleX;
+                } else if (!qFuzzyIsNull(scaleY)) {
+                    derivedScale = scaleY;
+                }
+
+                if (derivedScale > 0.0)
+                    restoredScale = std::clamp(derivedScale, kMinimumScale, kMaximumScale);
+
+                restoredRotation = qRadiansToDegrees(std::atan2(previousTransform.m21(), previousTransform.m11()));
+            }
+
             m_pixmapItem->setTransform(QTransform());
-            m_currentScale = m_savedScaleBeforePin;
-            m_currentRotation = m_savedRotationBeforePin;
+            m_currentScale = restoredScale;
+            m_currentRotation = restoredRotation;
             updateTransform();
 
             if (shouldRestorePosition) {
