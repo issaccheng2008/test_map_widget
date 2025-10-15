@@ -9,6 +9,7 @@
 #include <QWheelEvent>
 #include <QCursor>
 #include <QFont>
+#include <QSize>
 #include <QtMath>
 #include <QTransform>
 
@@ -27,6 +28,7 @@ constexpr qreal kHandleOffset = 30.0;
 constexpr qreal kHandleRadius = 14.0;
 constexpr qreal kHandleHoverRadius = 18.0;
 constexpr qreal kViewportMatchTolerance = 0.5;
+constexpr int kBaseImageDimension = 484;
 }
 
 class RotationHandle : public QGraphicsItem
@@ -140,6 +142,9 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     if (pixmap.isNull())
         return false;
 
+    pixmap = pixmap.scaled(QSize(kBaseImageDimension, kBaseImageDimension), Qt::KeepAspectRatio,
+                           Qt::SmoothTransformation);
+
     clearImage();
 
     m_pixmapItem = m_scene->addPixmap(pixmap);
@@ -164,6 +169,7 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     const QPointF viewCenter = mapToScene(viewport()->rect().center());
     const QPointF itemCenter = m_pixmapItem->boundingRect().center();
     m_pixmapItem->setPos(viewCenter - itemCenter);
+    centerOn(m_pixmapItem);
 
     updateMouseTransparency();
     viewport()->update();
