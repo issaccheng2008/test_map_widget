@@ -29,6 +29,7 @@
 #include <QStringList>
 #include <QEvent>
 #include <QMouseEvent>
+#include <QWidget>
 
 // Standard library
 #include <cmath>
@@ -69,6 +70,12 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
 
     // Create the map view widget
     m_mapView = ui->mapView;
+    m_mapView->setMouseTracking(true);
+
+    if (QWidget *viewport = m_mapView->viewport()) {
+        viewport->setMouseTracking(true);
+        viewport->installEventFilter(this);
+    }
 
     // Create the image overlay widget that sits on top of the map view
     m_imageOverlay = new OverlayImageWidget(m_mapView);
@@ -216,16 +223,75 @@ bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
                 m_imageOverlay->setGeometry(m_mapView->rect());
             updatePinnedImagePosition();
             updateUiState();
-        } else if (event->type() == QEvent::MouseButtonPress && m_isCapturingObstacle) {
+        }
+        return QMainWindow::eventFilter(watched, event);
+    }
+
+    if (m_mapView && watched == m_mapView->viewport()) {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
             auto *mouseEvent = static_cast<QMouseEvent *>(event);
-            if (mouseEvent->button() == Qt::RightButton) {
-                addObstaclePoint(mouseEvent->pos());
-                return true;
+            updateCursorCoordinateDisplay(mouseEvent->pos());
+            break;
+        }
+        case QEvent::MouseButtonPress: {
+            if (m_isCapturingObstacle) {
+                auto *mouseEvent = static_cast<QMouseEvent *>(event);
+                if (mouseEvent->button() == Qt::RightButton) {
+                    addObstaclePoint(mouseEvent->pos());
+                    return true;
+                }
             }
+            break;
+        }
+        case QEvent::Leave:
+            if (ui->cursorCoordinateValue)
+                ui->cursorCoordinateValue->setText(tr("Lat: ---\nLon: ---"));
+            break;
+        default:
+            break;
         }
     }
 
     return QMainWindow::eventFilter(watched, event);
+}
+
+void Test_map_widget::updateCursorCoordinateDisplay(const QPoint &screenPoint)
+{
+    if (!m_mapView || !ui->cursorCoordinateValue)
+        return;
+
+    const QString defaultText = tr("Lat: ---\nLon: ---");
+
+    if (QWidget *viewport = m_mapView->viewport()) {
+        if (!viewport->rect().contains(screenPoint)) {
+            ui->cursorCoordinateValue->setText(defaultText);
+            return;
+        }
+    }
+
+    const Point mapPoint = m_mapView->screenToLocation(screenPoint.x(), screenPoint.y());
+    if (mapPoint.isEmpty()) {
+        ui->cursorCoordinateValue->setText(defaultText);
+        return;
+    }
+
+    Point geographicPoint = mapPoint;
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+    if (!geographicPoint.spatialReference().isEmpty() && geographicPoint.spatialReference() != wgs84) {
+        const Geometry projected = GeometryEngine::project(mapPoint, wgs84);
+        if (!projected.isEmpty())
+            geographicPoint = geometry_cast<Point>(projected);
+    }
+
+    if (geographicPoint.isEmpty()) {
+        ui->cursorCoordinateValue->setText(defaultText);
+        return;
+    }
+
+    const double latitude = geographicPoint.y();
+    const double longitude = geographicPoint.x();
+    ui->cursorCoordinateValue->setText(tr("Lat: %1\nLon: %2").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6));
 }
 
 void Test_map_widget::importImage()
