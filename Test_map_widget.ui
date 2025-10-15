@@ -48,96 +48,116 @@
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="coordinatesLabel">
-         <property name="text">
-          <string>Coordinates (lat, lon)</string>
+        <widget class="QGroupBox" name="goToLocationGroup">
+         <property name="title">
+          <string>Go to Location</string>
          </property>
+         <layout class="QVBoxLayout" name="goToLocationLayout">
+          <item>
+           <widget class="QLineEdit" name="coordinateInput">
+            <property name="placeholderText">
+             <string>Coordinates (lat, lon)</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="goToCoordinateButton">
+            <property name="text">
+             <string>Go to location</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="coordinateInput">
-         <property name="placeholderText">
-          <string>34.056, -117.195</string>
+        <widget class="QGroupBox" name="editPatternGroup">
+         <property name="title">
+          <string>Edit Pattern</string>
          </property>
+         <layout class="QVBoxLayout" name="editPatternLayout">
+          <item>
+           <widget class="QPushButton" name="importImageButton">
+            <property name="text">
+             <string>Load Image/Modify Position</string>
+            </property>
+            <property name="toolTip">
+             <string>Select an image to display on top of the map</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="removeImageButton">
+            <property name="text">
+             <string>Close Image</string>
+            </property>
+            <property name="toolTip">
+             <string>Hide the currently imported image</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="setPositionButton">
+            <property name="text">
+             <string>Set Position</string>
+            </property>
+            <property name="toolTip">
+             <string>Replace the image with a map footprint</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="openGridButton">
+            <property name="text">
+             <string>Assign Seed</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="toolTip">
+             <string>Open a new window with a gridded view of the pinned image</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </item>
        <item>
-       <widget class="QPushButton" name="goToCoordinateButton">
-        <property name="text">
-         <string>Go to location</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="importImageButton">
-        <property name="text">
-         <string>Load Image</string>
-        </property>
-        <property name="toolTip">
-         <string>Select an image to display on top of the map</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="removeImageButton">
-        <property name="text">
-         <string>Close Image</string>
-        </property>
-        <property name="toolTip">
-         <string>Hide the currently imported image</string>
-        </property>
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="setPositionButton">
-        <property name="text">
-         <string>Set Position</string>
-        </property>
-        <property name="toolTip">
-         <string>Replace the image with a map footprint</string>
-        </property>
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="openGridButton">
-        <property name="text">
-         <string>Show Grid Window</string>
-        </property>
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="toolTip">
-         <string>Open a new window with a gridded view of the pinned image</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="addObstacleButton">
-        <property name="text">
-         <string>Add Obstacle</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="finishObstacleButton">
-        <property name="text">
-         <string>Finish</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="cancelObstacleButton">
-        <property name="text">
-         <string>Cancel</string>
-        </property>
-       </widget>
-      </item>
+        <widget class="QGroupBox" name="obstacleGroup">
+         <property name="title">
+          <string>Obstacle</string>
+         </property>
+         <layout class="QVBoxLayout" name="obstacleLayout">
+          <item>
+           <widget class="QPushButton" name="addObstacleButton">
+            <property name="text">
+             <string>Add Obstacle</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="finishObstacleButton">
+            <property name="text">
+             <string>Finish</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="cancelObstacleButton">
+            <property name="text">
+             <string>Cancel</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
       <item>
        <spacer name="sideSpacer">
         <property name="orientation">
