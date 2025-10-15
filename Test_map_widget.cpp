@@ -441,10 +441,15 @@ void Test_map_widget::openGridPreview()
     m_gridWindow->activateWindow();
 }
 
-void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap)
+void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap, const QVector<QVector<int>> &seedChannels)
 {
     if (!m_imageOverlay || pixmap.isNull())
         return;
+
+    seedChannelGrid.clear();
+    seedChannelGrid.reserve(seedChannels.size());
+    for (const QVector<int> &row : seedChannels)
+        seedChannelGrid.emplace_back(row.begin(), row.end());
 
     m_imageOverlay->setCurrentPixmap(pixmap);
     if (m_isImagePinned)
