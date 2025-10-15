@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
     // ArcGIS location services. Go to the tutorial at https://links.esri.com/create-an-api-key.
     // Copy the API Key access token.
 
-    const QString accessToken = QString("");
+    const QString accessToken = QString("AAPTxy8BH1VEsoebNVZXo8HurGlhe_M6UHXSvqoW1-L9IDEgOik3UmWL-0aAt7GWTOSEbXrRR-Ksi8PIgv-p3v6iR_A9u4hvhx9FL6RmkAQY1vNLHyFdBvTv8nVVgVidU1-fE-i94_mH6fHglRx9OoJOSR4VD67Jbw0omuLqowyqfDiMaX4elLl5guFZsS6lRcDnbWjDU-k4tqgQFOjA3ObbOICM5bPm1VsJAYLYVchME-E.AT1_x2k92Iwv");
 
     if (accessToken.isEmpty()) {
         qWarning()
