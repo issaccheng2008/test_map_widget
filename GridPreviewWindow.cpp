@@ -617,7 +617,7 @@ bool GridPreviewWindow::allSeedInputsValid() const
             return false;
 
         QWidget *widget = m_seedListWidget->itemWidget(item);
-        auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
+        auto *seedWidget = dynamic_cast<SeedItemWidget *>(widget);
         if (!seedWidget)
             return false;
 
@@ -646,7 +646,7 @@ bool GridPreviewWindow::collectSeedDefinitions(QVector<SeedDefinition> &outSeeds
             return false;
 
         QWidget *widget = m_seedListWidget->itemWidget(item);
-        auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
+        auto *seedWidget = dynamic_cast<SeedItemWidget *>(widget);
         if (!seedWidget)
             return false;
 
@@ -662,7 +662,7 @@ bool GridPreviewWindow::collectSeedDefinitions(QVector<SeedDefinition> &outSeeds
 
 void GridPreviewWindow::connectSeedWidgetSignals(QWidget *widget)
 {
-    auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
+    auto *seedWidget = dynamic_cast<SeedItemWidget *>(widget);
     if (!seedWidget)
         return;
 
