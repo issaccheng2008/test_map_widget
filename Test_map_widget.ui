@@ -29,6 +29,25 @@
      <widget class="QWidget" name="sidePanel" native="true">
       <layout class="QVBoxLayout" name="sideLayout">
        <item>
+        <widget class="QGroupBox" name="cursorCoordinateGroup">
+         <property name="title">
+          <string>Pointer Coordinates</string>
+         </property>
+         <layout class="QVBoxLayout" name="cursorCoordinateLayout">
+          <item>
+           <widget class="QLabel" name="cursorCoordinateValue">
+            <property name="text">
+             <string>Lat: ---&#xa;Lon: ---</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QLabel" name="coordinatesLabel">
          <property name="text">
           <string>Coordinates (lat, lon)</string>
