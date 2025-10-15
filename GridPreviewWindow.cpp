@@ -105,9 +105,13 @@ private:
         connect(m_targetColorEdit, &QLineEdit::textChanged, this, [this]() {
             updateColorPreview(m_targetColorEdit->text(), m_targetColorPreview);
         });
+        connect(m_channelCombo, &QComboBox::currentIndexChanged, this, [this]() {
+            updateSeedColorState();
+        });
 
         updateColorPreview(m_seedColorEdit->text(), m_seedColorPreview);
         updateColorPreview(m_targetColorEdit->text(), m_targetColorPreview);
+        updateSeedColorState();
     }
 
     static QColor parseColorString(const QString &text, bool *ok = nullptr)
@@ -165,6 +169,45 @@ private:
         preview->setToolTip(ok ? color.name() : QStringLiteral("Enter RGB as R,G,B"));
     }
 
+    static void setDiagonalPreview(QLabel *preview)
+    {
+        if (!preview)
+            return;
+
+        const QSize previewSize = preview->size();
+        if (!previewSize.isValid())
+            return;
+
+        QPixmap pixmap(previewSize);
+        pixmap.fill(Qt::white);
+
+        QPainter painter(&pixmap);
+        QPen pen(Qt::black);
+        pen.setWidth(2);
+        painter.setPen(pen);
+        painter.drawLine(QPointF(0.0, previewSize.height()), QPointF(previewSize.width(), 0.0));
+        painter.end();
+
+        preview->setPixmap(pixmap);
+        preview->setToolTip(QString());
+    }
+
+    void updateSeedColorState()
+    {
+        const bool channelIsEmpty = m_channelCombo && m_channelCombo->currentIndex() == 0;
+
+        if (m_seedColorEdit)
+            m_seedColorEdit->setEnabled(!channelIsEmpty);
+
+        if (!m_seedColorPreview)
+            return;
+
+        if (channelIsEmpty)
+            setDiagonalPreview(m_seedColorPreview);
+        else
+            updateColorPreview(m_seedColorEdit ? m_seedColorEdit->text() : QString(), m_seedColorPreview);
+    }
+
     QLabel *m_numberLabel = nullptr;
     QLineEdit *m_seedColorEdit = nullptr;
     QLabel *m_seedColorPreview = nullptr;
@@ -179,11 +222,12 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     : QDialog(parent)
     , m_imageLabel(new QLabel(this))
     , m_scrollArea(new QScrollArea(this))
-    , m_seeEffectButton(new QPushButton(tr("See effect"), this))
+    , m_seeEffectButton(new QPushButton(tr("Show effect"), this))
     , m_toggleGridLinesButton(new QPushButton(tr("Hide grid lines"), this))
     , m_commitButton(new QPushButton(tr("Commit changes"), this))
     , m_addSeedButton(new QPushButton(tr("Add seed"), this))
     , m_deleteSeedButton(new QPushButton(tr("Delete seed"), this))
+    , m_applyChangesButton(new QPushButton(tr("Apply changes"), this))
     , m_seedListWidget(new QListWidget(this))
 {
     setWindowTitle(tr("Pinned Image Grid"));
@@ -209,6 +253,7 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     seedButtonLayout->addWidget(m_deleteSeedButton);
     sideLayout->addLayout(seedButtonLayout);
     sideLayout->addWidget(m_seedListWidget);
+    sideLayout->addWidget(m_applyChangesButton);
     sideLayout->setStretch(3, 1);
 
     contentLayout->addWidget(m_scrollArea, 2);
@@ -221,7 +266,8 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     mainLayout->addLayout(contentLayout);
     mainLayout->addLayout(bottomLayout);
 
-    connect(m_seeEffectButton, &QPushButton::clicked, this, &GridPreviewWindow::handleSeeEffectClicked);
+    connect(m_seeEffectButton, &QPushButton::pressed, this, &GridPreviewWindow::handleSeeEffectPressed);
+    connect(m_seeEffectButton, &QPushButton::released, this, &GridPreviewWindow::handleSeeEffectReleased);
     connect(m_toggleGridLinesButton, &QPushButton::clicked, this, &GridPreviewWindow::handleToggleGridLinesClicked);
     connect(m_commitButton, &QPushButton::clicked, this, &GridPreviewWindow::handleCommitClicked);
     connect(m_addSeedButton, &QPushButton::clicked, this, &GridPreviewWindow::handleAddSeedClicked);
@@ -243,6 +289,7 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     m_effectWithGridPixmap = {};
     m_showEffect = false;
     m_showGridLines = true;
+    m_shouldRestoreEffectAfterPress = false;
     m_cellWidthPx = 0;
     m_cellHeightPx = 0;
 
@@ -364,7 +411,7 @@ void GridPreviewWindow::updateButtonStates()
 
     if (m_seeEffectButton) {
         m_seeEffectButton->setEnabled(effectPossible || m_showEffect);
-        m_seeEffectButton->setText(m_showEffect ? tr("Show original") : tr("See effect"));
+        m_seeEffectButton->setText(m_showEffect ? tr("Show original") : tr("Show effect"));
     }
 
     if (m_toggleGridLinesButton) {
@@ -383,6 +430,9 @@ void GridPreviewWindow::updateButtonStates()
         const bool hasSelection = m_seedListWidget && m_seedListWidget->currentRow() >= 0;
         m_deleteSeedButton->setEnabled(hasSelection);
     }
+
+    if (m_applyChangesButton)
+        m_applyChangesButton->setEnabled(m_seedListWidget && m_seedListWidget->count() > 2);
 }
 
 void GridPreviewWindow::updateSeedItemNumbers()
@@ -433,16 +483,20 @@ void GridPreviewWindow::handleDeleteSeedClicked()
     updateSeedItemNumbers();
 }
 
-void GridPreviewWindow::handleSeeEffectClicked()
+void GridPreviewWindow::handleSeeEffectPressed()
 {
-    if (!m_showEffect) {
-        if (!ensureEffectPixmaps())
-            return;
-        m_showEffect = true;
-    } else {
-        m_showEffect = false;
-    }
+    m_shouldRestoreEffectAfterPress = ensureEffectPixmaps();
+    m_showEffect = false;
+    updateDisplayedPixmap();
+}
 
+void GridPreviewWindow::handleSeeEffectReleased()
+{
+    if (!m_shouldRestoreEffectAfterPress)
+        return;
+
+    m_shouldRestoreEffectAfterPress = false;
+    m_showEffect = true;
     updateDisplayedPixmap();
 }
 

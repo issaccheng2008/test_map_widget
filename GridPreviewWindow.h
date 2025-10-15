@@ -30,7 +30,8 @@ private:
     void handleAddSeedClicked();
     void handleDeleteSeedClicked();
 
-    void handleSeeEffectClicked();
+    void handleSeeEffectPressed();
+    void handleSeeEffectReleased();
     void handleToggleGridLinesClicked();
     void handleCommitClicked();
 
@@ -41,6 +42,7 @@ private:
     QPushButton *m_commitButton = nullptr;
     QPushButton *m_addSeedButton = nullptr;
     QPushButton *m_deleteSeedButton = nullptr;
+    QPushButton *m_applyChangesButton = nullptr;
     QListWidget *m_seedListWidget = nullptr;
 
     QPixmap m_originalPixmap;
@@ -50,6 +52,7 @@ private:
 
     bool m_showEffect = false;
     bool m_showGridLines = true;
+    bool m_shouldRestoreEffectAfterPress = false;
 
     int m_cellWidthPx = 0;
     int m_cellHeightPx = 0;
