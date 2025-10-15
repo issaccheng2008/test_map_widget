@@ -612,12 +612,12 @@ bool GridPreviewWindow::allSeedInputsValid() const
         return false;
 
     for (int i = 0; i < m_seedListWidget->count(); ++i) {
-        const QListWidgetItem *item = m_seedListWidget->item(i);
+        QListWidgetItem *item = m_seedListWidget->item(i);
         if (!item)
             return false;
 
-        const QWidget *widget = m_seedListWidget->itemWidget(item);
-        const auto *seedWidget = qobject_cast<const SeedItemWidget *>(widget);
+        QWidget *widget = m_seedListWidget->itemWidget(item);
+        auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
         if (!seedWidget)
             return false;
 
@@ -641,12 +641,12 @@ bool GridPreviewWindow::collectSeedDefinitions(QVector<SeedDefinition> &outSeeds
     outSeeds.reserve(m_seedListWidget->count());
 
     for (int i = 0; i < m_seedListWidget->count(); ++i) {
-        const QListWidgetItem *item = m_seedListWidget->item(i);
+        QListWidgetItem *item = m_seedListWidget->item(i);
         if (!item)
             return false;
 
-        const QWidget *widget = m_seedListWidget->itemWidget(item);
-        const auto *seedWidget = qobject_cast<const SeedItemWidget *>(widget);
+        QWidget *widget = m_seedListWidget->itemWidget(item);
+        auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
         if (!seedWidget)
             return false;
 

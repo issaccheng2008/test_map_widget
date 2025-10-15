@@ -16,6 +16,16 @@ class GridPreviewWindow : public QDialog
 {
     Q_OBJECT
 public:
+    struct SeedDefinition
+    {
+        QColor seedColor;
+        QColor targetColor;
+        double weight = 1.0;
+        int channel = 0;
+
+        [[nodiscard]] bool channelIsEmpty() const { return channel == 0; }
+    };
+
     explicit GridPreviewWindow(QWidget *parent = nullptr);
 
     void setImageWithGrid(const QPixmap &pixmap, double widthMeters, double heightMeters);
@@ -72,7 +82,7 @@ private:
     QImage m_modifiedGridImage;
     QVector<QVector<int>> m_appliedSeedChannels;
 
-    bool m_showEffect = false;
+    bool m_showEffect = true;
     bool m_showGridLines = true;
     bool m_shouldRestoreEffectAfterPress = false;
 
