@@ -34,16 +34,6 @@ signals:
     void effectCommitted(const QPixmap &pixmap, const QVector<QVector<int>> &seedChannels);
 
 private:
-    struct SeedDefinition
-    {
-        QColor seedColor;
-        QColor targetColor;
-        double weight = 1.0;
-        int channel = 0;
-
-        [[nodiscard]] bool channelIsEmpty() const { return channel == 0; }
-    };
-
     void updateDisplayedPixmap();
     QPixmap drawGridLines(const QPixmap &base) const;
     bool ensureEffectPixmaps();
