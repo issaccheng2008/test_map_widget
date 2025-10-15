@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPen>
 #include <QPalette>
@@ -21,6 +22,8 @@
 
 #include <cmath>
 #include <algorithm>
+#include <limits>
+#include <optional>
 
 namespace
 {
@@ -45,6 +48,113 @@ public:
         if (m_numberLabel)
             m_numberLabel->setText(QString::number(number));
     }
+
+    [[nodiscard]] bool channelIsEmpty() const
+    {
+        return m_channelCombo && m_channelCombo->currentIndex() == 0;
+    }
+
+    [[nodiscard]] bool hasValidSeedColor() const
+    {
+        if (channelIsEmpty())
+            return true;
+
+        bool ok = false;
+        parseColorString(m_seedColorEdit ? m_seedColorEdit->text() : QString(), &ok);
+        return ok;
+    }
+
+    [[nodiscard]] bool hasValidTargetColor() const
+    {
+        bool ok = false;
+        parseColorString(m_targetColorEdit ? m_targetColorEdit->text() : QString(), &ok);
+        return ok;
+    }
+
+    [[nodiscard]] bool hasValidWeight() const
+    {
+        if (!m_targetWeightEdit)
+            return false;
+
+        bool ok = false;
+        const double value = m_targetWeightEdit->text().trimmed().toDouble(&ok);
+        return ok && value > 0.0;
+    }
+
+    [[nodiscard]] QColor seedColorValue(bool *ok = nullptr) const
+    {
+        if (channelIsEmpty()) {
+            if (ok)
+                *ok = true;
+            return QColor(0, 0, 0, 0);
+        }
+
+        return parseColorString(m_seedColorEdit ? m_seedColorEdit->text() : QString(), ok);
+    }
+
+    [[nodiscard]] QColor targetColorValue(bool *ok = nullptr) const
+    {
+        return parseColorString(m_targetColorEdit ? m_targetColorEdit->text() : QString(), ok);
+    }
+
+    [[nodiscard]] double weightValue(bool *ok = nullptr) const
+    {
+        if (!m_targetWeightEdit) {
+            if (ok)
+                *ok = false;
+            return 0.0;
+        }
+
+        bool localOk = false;
+        const double value = m_targetWeightEdit->text().trimmed().toDouble(&localOk);
+        const bool valid = localOk && value > 0.0;
+        if (ok)
+            *ok = valid;
+        return valid ? value : 0.0;
+    }
+
+    [[nodiscard]] int channelValue() const
+    {
+        if (!m_channelCombo)
+            return 0;
+
+        const QVariant data = m_channelCombo->currentData();
+        if (data.isValid())
+            return data.toInt();
+
+        return 0;
+    }
+
+    [[nodiscard]] std::optional<GridPreviewWindow::SeedDefinition> definition() const
+    {
+        if (!hasValidTargetColor() || !hasValidWeight())
+            return std::nullopt;
+
+        GridPreviewWindow::SeedDefinition result;
+        result.targetColor = targetColorValue();
+        bool weightOk = false;
+        result.weight = weightValue(&weightOk);
+        if (!weightOk)
+            return std::nullopt;
+
+        result.channel = channelIsEmpty() ? 0 : channelValue();
+        if (!channelIsEmpty()) {
+            bool seedOk = false;
+            result.seedColor = seedColorValue(&seedOk);
+            if (!seedOk)
+                return std::nullopt;
+            result.seedColor.setAlpha(255);
+        } else {
+            result.seedColor = QColor(0, 0, 0, 0);
+        }
+
+        return result;
+    }
+
+    [[nodiscard]] QLineEdit *seedColorLineEdit() const { return m_seedColorEdit; }
+    [[nodiscard]] QLineEdit *targetColorLineEdit() const { return m_targetColorEdit; }
+    [[nodiscard]] QLineEdit *targetWeightLineEdit() const { return m_targetWeightEdit; }
+    [[nodiscard]] QComboBox *channelComboBox() const { return m_channelCombo; }
 
 private:
     void setupUi()
@@ -85,6 +195,7 @@ private:
         auto *targetWeightLabel = new QLabel(QStringLiteral("Target weight"), this);
         m_targetWeightEdit = new QLineEdit(this);
         m_targetWeightEdit->setPlaceholderText(QStringLiteral("1.0"));
+        m_targetWeightEdit->setText(QStringLiteral("1.0"));
 
         mainLayout->addWidget(new QLabel(QStringLiteral("#"), this), 0, 0);
         mainLayout->addWidget(m_numberLabel, 0, 1);
@@ -272,6 +383,7 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     connect(m_commitButton, &QPushButton::clicked, this, &GridPreviewWindow::handleCommitClicked);
     connect(m_addSeedButton, &QPushButton::clicked, this, &GridPreviewWindow::handleAddSeedClicked);
     connect(m_deleteSeedButton, &QPushButton::clicked, this, &GridPreviewWindow::handleDeleteSeedClicked);
+    connect(m_applyChangesButton, &QPushButton::clicked, this, &GridPreviewWindow::handleApplyChangesClicked);
     connect(m_seedListWidget, &QListWidget::currentRowChanged, this, [this]() {
         updateButtonStates();
     });
@@ -287,11 +399,19 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     m_originalWithGridPixmap = {};
     m_effectPixmap = {};
     m_effectWithGridPixmap = {};
-    m_showEffect = false;
+    m_originalGridImage = {};
+    m_modifiedGridImage = {};
+    m_appliedSeedChannels.clear();
+    m_gridColumns = 0;
+    m_gridRows = 0;
+    m_showEffect = true;
     m_showGridLines = true;
     m_shouldRestoreEffectAfterPress = false;
     m_cellWidthPx = 0;
     m_cellHeightPx = 0;
+
+    if (m_seedListWidget)
+        m_seedListWidget->clear();
 
     if (pixmap.isNull() || widthMeters <= 0.0 || heightMeters <= 0.0) {
         m_imageLabel->clear();
@@ -313,6 +433,10 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     }
 
     m_originalWithGridPixmap = drawGridLines(m_originalPixmap);
+
+    if (!ensureOriginalGridImage() || !rebuildEffectPixmapsFromModifiedGrid())
+        m_showEffect = false;
+
     updateDisplayedPixmap();
 }
 
@@ -362,34 +486,63 @@ QPixmap GridPreviewWindow::drawGridLines(const QPixmap &base) const
 
 bool GridPreviewWindow::ensureEffectPixmaps()
 {
-    if (!m_effectPixmap.isNull() || !m_effectWithGridPixmap.isNull())
+    if (!m_effectPixmap.isNull() && !m_effectWithGridPixmap.isNull())
+        return true;
+
+    if (!ensureOriginalGridImage())
+        return false;
+
+    return rebuildEffectPixmapsFromModifiedGrid();
+}
+
+bool GridPreviewWindow::ensureOriginalGridImage()
+{
+    if (!m_originalGridImage.isNull() && m_gridColumns > 0 && m_gridRows > 0)
         return true;
 
     if (m_originalPixmap.isNull() || m_cellWidthPx <= 0 || m_cellHeightPx <= 0)
         return false;
 
-    const int columns = m_originalPixmap.width() / m_cellWidthPx;
-    const int rows = m_originalPixmap.height() / m_cellHeightPx;
+    m_gridColumns = m_originalPixmap.width() / m_cellWidthPx;
+    m_gridRows = m_originalPixmap.height() / m_cellHeightPx;
 
-    if (columns <= 0 || rows <= 0)
+    if (m_gridColumns <= 0 || m_gridRows <= 0)
         return false;
 
-    const int cropWidth = columns * m_cellWidthPx;
-    const int cropHeight = rows * m_cellHeightPx;
+    const int cropWidth = m_gridColumns * m_cellWidthPx;
+    const int cropHeight = m_gridRows * m_cellHeightPx;
 
     QImage sourceImage = m_originalPixmap.toImage().convertToFormat(QImage::Format_ARGB32);
-    if (sourceImage.width() < cropWidth || sourceImage.height() < cropHeight)
+    if (sourceImage.isNull() || sourceImage.width() < cropWidth || sourceImage.height() < cropHeight)
         return false;
 
     QImage cropped = sourceImage.copy(0, 0, cropWidth, cropHeight);
     if (cropped.isNull())
         return false;
 
-    QImage reduced = cropped.scaled(columns, rows, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QImage reduced = cropped.scaled(m_gridColumns, m_gridRows, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     if (reduced.isNull())
         return false;
 
-    QImage effectImage = reduced.scaled(cropWidth, cropHeight, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    if (reduced.format() != QImage::Format_ARGB32)
+        reduced = reduced.convertToFormat(QImage::Format_ARGB32);
+
+    m_originalGridImage = reduced;
+    m_modifiedGridImage = reduced;
+    m_appliedSeedChannels = QVector<QVector<int>>(m_gridRows, QVector<int>(m_gridColumns, 0));
+
+    return true;
+}
+
+bool GridPreviewWindow::rebuildEffectPixmapsFromModifiedGrid()
+{
+    if (m_modifiedGridImage.isNull() || m_cellWidthPx <= 0 || m_cellHeightPx <= 0 || m_gridColumns <= 0 || m_gridRows <= 0)
+        return false;
+
+    const int cropWidth = m_gridColumns * m_cellWidthPx;
+    const int cropHeight = m_gridRows * m_cellHeightPx;
+
+    QImage effectImage = m_modifiedGridImage.scaled(cropWidth, cropHeight, Qt::IgnoreAspectRatio, Qt::FastTransformation);
     if (effectImage.isNull())
         return false;
 
@@ -432,7 +585,7 @@ void GridPreviewWindow::updateButtonStates()
     }
 
     if (m_applyChangesButton)
-        m_applyChangesButton->setEnabled(m_seedListWidget && m_seedListWidget->count() > 2);
+        m_applyChangesButton->setEnabled(allSeedInputsValid());
 }
 
 void GridPreviewWindow::updateSeedItemNumbers()
@@ -453,6 +606,87 @@ void GridPreviewWindow::updateSeedItemNumbers()
     updateButtonStates();
 }
 
+bool GridPreviewWindow::allSeedInputsValid() const
+{
+    if (!m_seedListWidget || m_seedListWidget->count() < 2)
+        return false;
+
+    for (int i = 0; i < m_seedListWidget->count(); ++i) {
+        QListWidgetItem *item = m_seedListWidget->item(i);
+        if (!item)
+            return false;
+
+        QWidget *widget = m_seedListWidget->itemWidget(item);
+        auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
+        if (!seedWidget)
+            return false;
+
+        if (!seedWidget->hasValidTargetColor() || !seedWidget->hasValidWeight())
+            return false;
+
+        if (!seedWidget->channelIsEmpty() && !seedWidget->hasValidSeedColor())
+            return false;
+    }
+
+    return true;
+}
+
+bool GridPreviewWindow::collectSeedDefinitions(QVector<SeedDefinition> &outSeeds) const
+{
+    outSeeds.clear();
+
+    if (!m_seedListWidget || m_seedListWidget->count() == 0)
+        return false;
+
+    outSeeds.reserve(m_seedListWidget->count());
+
+    for (int i = 0; i < m_seedListWidget->count(); ++i) {
+        QListWidgetItem *item = m_seedListWidget->item(i);
+        if (!item)
+            return false;
+
+        QWidget *widget = m_seedListWidget->itemWidget(item);
+        auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
+        if (!seedWidget)
+            return false;
+
+        auto definition = seedWidget->definition();
+        if (!definition)
+            return false;
+
+        outSeeds.append(*definition);
+    }
+
+    return !outSeeds.isEmpty();
+}
+
+void GridPreviewWindow::connectSeedWidgetSignals(QWidget *widget)
+{
+    auto *seedWidget = qobject_cast<SeedItemWidget *>(widget);
+    if (!seedWidget)
+        return;
+
+    if (auto *edit = seedWidget->seedColorLineEdit())
+        connect(edit, &QLineEdit::textChanged, this, [this]() {
+            updateButtonStates();
+        });
+
+    if (auto *edit = seedWidget->targetColorLineEdit())
+        connect(edit, &QLineEdit::textChanged, this, [this]() {
+            updateButtonStates();
+        });
+
+    if (auto *edit = seedWidget->targetWeightLineEdit())
+        connect(edit, &QLineEdit::textChanged, this, [this]() {
+            updateButtonStates();
+        });
+
+    if (auto *combo = seedWidget->channelComboBox())
+        connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int) {
+            updateButtonStates();
+        });
+}
+
 void GridPreviewWindow::handleAddSeedClicked()
 {
     if (!m_seedListWidget)
@@ -464,6 +698,8 @@ void GridPreviewWindow::handleAddSeedClicked()
     m_seedListWidget->addItem(item);
     m_seedListWidget->setItemWidget(item, widget);
     m_seedListWidget->setCurrentItem(item);
+
+    connectSeedWidgetSignals(widget);
 
     updateButtonStates();
 }
@@ -481,6 +717,87 @@ void GridPreviewWindow::handleDeleteSeedClicked()
     delete item;
 
     updateSeedItemNumbers();
+}
+
+void GridPreviewWindow::handleApplyChangesClicked()
+{
+    if (!allSeedInputsValid()) {
+        QMessageBox::warning(this, tr("Apply changes"), tr("Please provide at least two valid seeds with colors and weights."));
+        return;
+    }
+
+    if (!ensureOriginalGridImage()) {
+        QMessageBox::warning(this, tr("Apply changes"), tr("Unable to prepare the image grid for modification."));
+        return;
+    }
+
+    QVector<SeedDefinition> seeds;
+    if (!collectSeedDefinitions(seeds)) {
+        QMessageBox::warning(this, tr("Apply changes"), tr("Some seed values are invalid. Please correct them and try again."));
+        return;
+    }
+
+    if (seeds.isEmpty())
+        return;
+
+    if (m_gridColumns <= 0 || m_gridRows <= 0 || m_originalGridImage.isNull())
+        return;
+
+    QImage newGrid(m_gridColumns, m_gridRows, QImage::Format_ARGB32);
+    newGrid.fill(Qt::transparent);
+
+    QVector<QVector<int>> channelGrid(m_gridRows, QVector<int>(m_gridColumns, 0));
+
+    for (int y = 0; y < m_gridRows; ++y) {
+        for (int x = 0; x < m_gridColumns; ++x) {
+            const QColor oriColor = QColor::fromRgba(m_originalGridImage.pixel(x, y));
+
+            double bestValue = std::numeric_limits<double>::infinity();
+            const SeedDefinition *bestSeed = nullptr;
+
+            for (const SeedDefinition &seed : seeds) {
+                if (seed.weight <= 0.0)
+                    continue;
+
+                const double dr = static_cast<double>(oriColor.red()) - static_cast<double>(seed.targetColor.red());
+                const double dg = static_cast<double>(oriColor.green()) - static_cast<double>(seed.targetColor.green());
+                const double db = static_cast<double>(oriColor.blue()) - static_cast<double>(seed.targetColor.blue());
+                const double diff = dr * dr + dg * dg + db * db;
+                const double value = diff / seed.weight;
+
+                if (value < bestValue) {
+                    bestValue = value;
+                    bestSeed = &seed;
+                }
+            }
+
+            if (!bestSeed)
+                continue;
+
+            if (bestSeed->channelIsEmpty()) {
+                newGrid.setPixelColor(x, y, QColor(0, 0, 0, 0));
+                channelGrid[y][x] = 0;
+            } else {
+                QColor seedColor = bestSeed->seedColor;
+                seedColor.setAlpha(255);
+                newGrid.setPixelColor(x, y, seedColor);
+                channelGrid[y][x] = bestSeed->channel;
+            }
+        }
+    }
+
+    m_modifiedGridImage = newGrid;
+    m_appliedSeedChannels = channelGrid;
+    m_effectPixmap = {};
+    m_effectWithGridPixmap = {};
+
+    if (!rebuildEffectPixmapsFromModifiedGrid()) {
+        QMessageBox::warning(this, tr("Apply changes"), tr("Unable to generate the modified image."));
+        return;
+    }
+
+    m_showEffect = true;
+    updateDisplayedPixmap();
 }
 
 void GridPreviewWindow::handleSeeEffectPressed()
@@ -511,6 +828,6 @@ void GridPreviewWindow::handleCommitClicked()
     if (!ensureEffectPixmaps())
         return;
 
-    emit effectCommitted(m_effectPixmap);
+    emit effectCommitted(m_effectPixmap, m_appliedSeedChannels);
     close();
 }

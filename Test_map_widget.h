@@ -24,9 +24,11 @@ class Point;
 #include <QList>
 #include <QPoint>
 #include <QPointer>
+#include <QVector>
 
 #include <optional>
 #include <utility>
+#include <vector>
 
 class OverlayImageWidget;
 class GridPreviewWindow;
@@ -50,6 +52,8 @@ public:
     explicit Test_map_widget(QWidget *parent = nullptr);
     ~Test_map_widget() override;
 
+    std::vector<std::vector<int>> seedChannelGrid;
+
     void drawLineBetweenCoordinates(const Esri::ArcGISRuntime::Point &start,
                                     const Esri::ArcGISRuntime::Point &end);
 
@@ -59,7 +63,7 @@ private slots:
     void clearImportedImage();
     void setImagePosition();
     void openGridPreview();
-    void applyCommittedGridEffect(const QPixmap &pixmap);
+    void applyCommittedGridEffect(const QPixmap &pixmap, const QVector<QVector<int>> &seedChannels);
     void startObstacleCapture();
     void finishObstacleCapture();
     void cancelObstacleCapture();
