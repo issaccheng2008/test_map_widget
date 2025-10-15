@@ -76,6 +76,7 @@ private:
     std::optional<double> currentImageAreaSquareMeters() const;
     bool isCurrentImageAreaAcceptable() const;
     std::optional<std::pair<double, double>> pinnedImageDimensionsMeters() const;
+    void updateCursorCoordinateDisplay(const QPoint &screenPoint);
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
