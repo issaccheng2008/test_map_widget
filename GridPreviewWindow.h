@@ -16,6 +16,8 @@ class QScrollArea;
 class QPushButton;
 class QListWidget;
 class QLineEdit;
+class QWidget;
+class QResizeEvent;
 
 class GridPreviewWindow : public QDialog
 {
@@ -58,10 +60,15 @@ private:
     void handleSeeEffectClicked();
     void handleToggleGridLinesClicked();
     void handleCommitClicked();
+    void handlePaletteButtonClicked();
 
     void startColorPickingForWidget(QLineEdit *lineEdit, QLabel *previewLabel);
     void stopColorPicking();
     void applyEmptyChannelHighlight(QImage &image) const;
+    void updateColorSelectionUiState();
+    void updatePalettePanelGeometry();
+
+    void resizeEvent(QResizeEvent *event) override;
 
     QLabel *m_imageLabel = nullptr;
     QScrollArea *m_scrollArea = nullptr;
@@ -72,6 +79,10 @@ private:
     QPushButton *m_deleteSeedButton = nullptr;
     QPushButton *m_applyChangesButton = nullptr;
     QListWidget *m_seedListWidget = nullptr;
+    QWidget *m_paletteContainer = nullptr;
+    QPushButton *m_showPaletteButton = nullptr;
+    QPushButton *m_exitColorSelectionButton = nullptr;
+    QLabel *m_paletteImageLabel = nullptr;
 
     QPixmap m_originalPixmap;
     QPixmap m_originalWithGridPixmap;
@@ -96,6 +107,7 @@ private:
     QLineEdit *m_activeColorLineEdit = nullptr;
     QLabel *m_activeColorPreview = nullptr;
     QString m_activePreviewOriginalStyle;
-};
+    bool m_paletteVisible = false;
+}; 
 
 #endif // GRIDPREVIEWWINDOW_H
