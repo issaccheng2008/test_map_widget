@@ -668,9 +668,9 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     m_paletteContainer->setAutoFillBackground(true);
     m_paletteContainer->setAttribute(Qt::WA_StyledBackground, true);
 
-    auto *paletteLayout = new QVBoxLayout(m_paletteContainer);
-    paletteLayout->setContentsMargins(8, 8, 8, 8);
-    paletteLayout->setSpacing(6);
+    m_paletteLayout = new QVBoxLayout(m_paletteContainer);
+    m_paletteLayout->setContentsMargins(8, 8, 8, 8);
+    m_paletteLayout->setSpacing(6);
 
     auto *paletteButtonRow = new QHBoxLayout();
     paletteButtonRow->setContentsMargins(0, 0, 0, 0);
@@ -688,8 +688,8 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     m_paletteImageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     m_paletteImageLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
-    paletteLayout->addLayout(paletteButtonRow);
-    paletteLayout->addWidget(m_paletteImageLabel);
+    m_paletteLayout->addLayout(paletteButtonRow);
+    m_paletteLayout->addWidget(m_paletteImageLabel);
 
     connect(m_seeEffectButton, &QPushButton::clicked, this, &GridPreviewWindow::handleSeeEffectClicked);
     connect(m_toggleGridLinesButton, &QPushButton::clicked, this, &GridPreviewWindow::handleToggleGridLinesClicked);

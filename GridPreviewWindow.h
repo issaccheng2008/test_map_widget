@@ -17,6 +17,8 @@ class QPushButton;
 class QListWidget;
 class QLineEdit;
 class QWidget;
+class QFrame;
+class QVBoxLayout;
 class QResizeEvent;
 
 class GridPreviewWindow : public QDialog
@@ -79,7 +81,8 @@ private:
     QPushButton *m_deleteSeedButton = nullptr;
     QPushButton *m_applyChangesButton = nullptr;
     QListWidget *m_seedListWidget = nullptr;
-    QWidget *m_paletteContainer = nullptr;
+    QFrame *m_paletteContainer = nullptr;
+    QVBoxLayout *m_paletteLayout = nullptr;
     QPushButton *m_showPaletteButton = nullptr;
     QPushButton *m_exitColorSelectionButton = nullptr;
     QLabel *m_paletteImageLabel = nullptr;
