@@ -662,13 +662,14 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     mainLayout->addLayout(contentLayout);
     mainLayout->addLayout(bottomLayout);
 
-    m_paletteContainer = new QFrame(this);
-    m_paletteContainer->setVisible(false);
-    m_paletteContainer->setFrameShape(QFrame::StyledPanel);
-    m_paletteContainer->setAutoFillBackground(true);
-    m_paletteContainer->setAttribute(Qt::WA_StyledBackground, true);
+    m_paletteFrame = new QFrame(this);
+    m_paletteContainer = m_paletteFrame;
+    m_paletteFrame->setVisible(false);
+    m_paletteFrame->setFrameShape(QFrame::StyledPanel);
+    m_paletteFrame->setAutoFillBackground(true);
+    m_paletteFrame->setAttribute(Qt::WA_StyledBackground, true);
 
-    m_paletteLayout = new QVBoxLayout(m_paletteContainer);
+    m_paletteLayout = new QVBoxLayout(m_paletteFrame);
     m_paletteLayout->setContentsMargins(8, 8, 8, 8);
     m_paletteLayout->setSpacing(6);
 
@@ -676,13 +677,13 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     paletteButtonRow->setContentsMargins(0, 0, 0, 0);
     paletteButtonRow->setSpacing(6);
 
-    m_showPaletteButton = new QPushButton(tr("Show color palette"), m_paletteContainer);
-    m_exitColorSelectionButton = new QPushButton(tr("Exit color-selection mode"), m_paletteContainer);
+    m_showPaletteButton = new QPushButton(tr("Show color palette"), m_paletteFrame);
+    m_exitColorSelectionButton = new QPushButton(tr("Exit color-selection mode"), m_paletteFrame);
 
     paletteButtonRow->addWidget(m_showPaletteButton);
     paletteButtonRow->addWidget(m_exitColorSelectionButton);
 
-    m_paletteImageLabel = new QLabel(m_paletteContainer);
+    m_paletteImageLabel = new QLabel(m_paletteFrame);
     m_paletteImageLabel->setVisible(false);
     m_paletteImageLabel->setFrameShape(QFrame::Box);
     m_paletteImageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);

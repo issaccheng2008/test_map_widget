@@ -81,7 +81,8 @@ private:
     QPushButton *m_deleteSeedButton = nullptr;
     QPushButton *m_applyChangesButton = nullptr;
     QListWidget *m_seedListWidget = nullptr;
-    QFrame *m_paletteContainer = nullptr;
+    QWidget *m_paletteContainer = nullptr;
+    QFrame *m_paletteFrame = nullptr;
     QVBoxLayout *m_paletteLayout = nullptr;
     QPushButton *m_showPaletteButton = nullptr;
     QPushButton *m_exitColorSelectionButton = nullptr;
