@@ -3,17 +3,23 @@
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QColor>
+#include <QCursor>
 #include <QFrame>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QPalette>
 #include <QPushButton>
+#include <QScreen>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QVBoxLayout>
@@ -22,6 +28,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <functional>
 #include <limits>
 #include <optional>
 
@@ -29,10 +36,232 @@ namespace
 {
 constexpr double kGridSpacingMeters = 0.3;
 constexpr int kChannelCount = 5;
+
+QCursor createDropperCursor()
+{
+    QPixmap pixmap(24, 24);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    QPen outlinePen(QColor(32, 32, 32));
+    outlinePen.setWidth(2);
+    outlinePen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(outlinePen);
+    painter.setBrush(QColor(240, 240, 240));
+
+    QPainterPath path;
+    path.moveTo(6, 20);
+    path.lineTo(10, 16);
+    path.lineTo(16, 10);
+    path.cubicTo(19, 7, 19, 4, 17, 2);
+    path.cubicTo(15, 0, 12, 1, 10, 3);
+    path.lineTo(4, 9);
+    path.lineTo(2, 11);
+    path.lineTo(6, 15);
+    path.lineTo(2, 19);
+    path.closeSubpath();
+    painter.drawPath(path);
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(120, 180, 255));
+    painter.drawEllipse(QPointF(15.5, 8.5), 3.0, 3.0);
+
+    painter.end();
+
+    return QCursor(pixmap, 6, 20);
 }
+} // namespace
+
+class ColorPickerOverlay : public QWidget
+{
+public:
+    explicit ColorPickerOverlay(QWidget *parent = nullptr)
+        : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, false);
+        setAttribute(Qt::WA_NoSystemBackground);
+        setAttribute(Qt::WA_TranslucentBackground);
+        setAttribute(Qt::WA_ShowWithoutActivating);
+        setWindowFlag(Qt::FramelessWindowHint, true);
+        setWindowFlag(Qt::Tool, true);
+        setWindowFlag(Qt::WindowStaysOnTopHint, true);
+        setWindowFlag(Qt::BypassWindowManagerHint, true);
+        setMouseTracking(true);
+    }
+
+    ~ColorPickerOverlay() override
+    {
+        finish();
+    }
+
+    void begin()
+    {
+        QRect bounds;
+        const QList<QScreen *> screens = QGuiApplication::screens();
+        for (QScreen *screen : screens) {
+            if (screen)
+                bounds = bounds.united(screen->geometry());
+        }
+
+        if (bounds.isEmpty()) {
+            if (QScreen *primary = QGuiApplication::primaryScreen())
+                bounds = primary->geometry();
+        }
+
+        if (bounds.isEmpty())
+            bounds = QRect(QPoint(0, 0), QSize(1, 1));
+
+        setGeometry(bounds);
+        show();
+        raise();
+        activateWindow();
+
+        if (!m_cursorActive) {
+            QGuiApplication::setOverrideCursor(createDropperCursor());
+            m_cursorActive = true;
+        }
+
+        grabMouse();
+        grabKeyboard();
+    }
+
+    void finish()
+    {
+        if (m_cursorActive) {
+            QGuiApplication::restoreOverrideCursor();
+            m_cursorActive = false;
+        }
+
+        releaseMouse();
+        releaseKeyboard();
+        hide();
+    }
+
+    void setColorPickedCallback(std::function<void(const QColor &)> callback)
+    {
+        m_colorPickedCallback = std::move(callback);
+    }
+
+    void setCanceledCallback(std::function<void()> callback)
+    {
+        m_cancelCallback = std::move(callback);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (!event)
+            return;
+
+        if (event->button() == Qt::RightButton) {
+            const QPoint globalPos = event->globalPosition().toPoint();
+            const QColor picked = grabColorAt(globalPos);
+            finish();
+            if (picked.isValid()) {
+                if (m_colorPickedCallback)
+                    m_colorPickedCallback(picked);
+            } else if (m_cancelCallback) {
+                m_cancelCallback();
+            }
+            event->accept();
+            return;
+        }
+
+        if (event->button() == Qt::LeftButton) {
+            finish();
+            if (m_cancelCallback)
+                m_cancelCallback();
+            event->accept();
+            return;
+        }
+
+        QWidget::mousePressEvent(event);
+    }
+
+    void keyPressEvent(QKeyEvent *event) override
+    {
+        if (event && event->key() == Qt::Key_Escape) {
+            finish();
+            if (m_cancelCallback)
+                m_cancelCallback();
+            event->accept();
+            return;
+        }
+
+        QWidget::keyPressEvent(event);
+    }
+
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+        QPainter painter(this);
+        painter.fillRect(rect(), QColor(0, 0, 0, 0));
+    }
+
+private:
+    [[nodiscard]] QColor grabColorAt(const QPoint &globalPos) const
+    {
+        QScreen *screen = QGuiApplication::screenAt(globalPos);
+        if (!screen)
+            screen = QGuiApplication::primaryScreen();
+
+        if (!screen)
+            return QColor();
+
+        QPixmap pixmap = screen->grabWindow(0, globalPos.x(), globalPos.y(), 1, 1);
+        if (pixmap.isNull())
+            return QColor();
+
+        QImage image = pixmap.toImage();
+        if (image.isNull())
+            return QColor();
+
+        return image.pixelColor(0, 0);
+    }
+
+    std::function<void(const QColor &)> m_colorPickedCallback;
+    std::function<void()> m_cancelCallback;
+    bool m_cursorActive = false;
+};
 
 namespace
 {
+
+namespace
+{
+class ColorPreviewLabel : public QLabel
+{
+public:
+    explicit ColorPreviewLabel(QWidget *parent = nullptr)
+        : QLabel(parent)
+    {
+        setCursor(Qt::PointingHandCursor);
+    }
+
+    void setClickCallback(std::function<void()> callback)
+    {
+        m_callback = std::move(callback);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event && event->button() == Qt::LeftButton) {
+            if (m_callback)
+                m_callback();
+            event->accept();
+            return;
+        }
+
+        QLabel::mousePressEvent(event);
+    }
+
+private:
+    std::function<void()> m_callback;
+};
+
 class SeedItemWidget : public QWidget
 {
 public:
@@ -155,6 +384,8 @@ public:
     [[nodiscard]] QLineEdit *targetColorLineEdit() const { return m_targetColorEdit; }
     [[nodiscard]] QLineEdit *targetWeightLineEdit() const { return m_targetWeightEdit; }
     [[nodiscard]] QComboBox *channelComboBox() const { return m_channelCombo; }
+    [[nodiscard]] ColorPreviewLabel *seedColorPreviewLabel() const { return m_seedColorPreview; }
+    [[nodiscard]] ColorPreviewLabel *targetColorPreviewLabel() const { return m_targetColorPreview; }
 
 private:
     void setupUi()
@@ -174,7 +405,7 @@ private:
         m_seedColorEdit = new QLineEdit(this);
         m_seedColorEdit->setPlaceholderText(QStringLiteral("255,255,255"));
         m_seedColorEdit->setText(QStringLiteral("255,255,255"));
-        m_seedColorPreview = new QLabel(this);
+        m_seedColorPreview = new ColorPreviewLabel(this);
         m_seedColorPreview->setFixedSize(32, 20);
         m_seedColorPreview->setFrameShape(QFrame::Box);
 
@@ -188,7 +419,7 @@ private:
         m_targetColorEdit = new QLineEdit(this);
         m_targetColorEdit->setPlaceholderText(QStringLiteral("255,255,255"));
         m_targetColorEdit->setText(QStringLiteral("255,255,255"));
-        m_targetColorPreview = new QLabel(this);
+        m_targetColorPreview = new ColorPreviewLabel(this);
         m_targetColorPreview->setFixedSize(32, 20);
         m_targetColorPreview->setFrameShape(QFrame::Box);
 
@@ -321,10 +552,10 @@ private:
 
     QLabel *m_numberLabel = nullptr;
     QLineEdit *m_seedColorEdit = nullptr;
-    QLabel *m_seedColorPreview = nullptr;
+    ColorPreviewLabel *m_seedColorPreview = nullptr;
     QComboBox *m_channelCombo = nullptr;
     QLineEdit *m_targetColorEdit = nullptr;
-    QLabel *m_targetColorPreview = nullptr;
+    ColorPreviewLabel *m_targetColorPreview = nullptr;
     QLineEdit *m_targetWeightEdit = nullptr;
 };
 }
@@ -377,8 +608,7 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     mainLayout->addLayout(contentLayout);
     mainLayout->addLayout(bottomLayout);
 
-    connect(m_seeEffectButton, &QPushButton::pressed, this, &GridPreviewWindow::handleSeeEffectPressed);
-    connect(m_seeEffectButton, &QPushButton::released, this, &GridPreviewWindow::handleSeeEffectReleased);
+    connect(m_seeEffectButton, &QPushButton::clicked, this, &GridPreviewWindow::handleSeeEffectClicked);
     connect(m_toggleGridLinesButton, &QPushButton::clicked, this, &GridPreviewWindow::handleToggleGridLinesClicked);
     connect(m_commitButton, &QPushButton::clicked, this, &GridPreviewWindow::handleCommitClicked);
     connect(m_addSeedButton, &QPushButton::clicked, this, &GridPreviewWindow::handleAddSeedClicked);
@@ -393,12 +623,21 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     resize(900, 650);
 }
 
+GridPreviewWindow::~GridPreviewWindow()
+{
+    stopColorPicking();
+}
+
 void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMeters, double heightMeters)
 {
+    stopColorPicking();
+
     m_originalPixmap = pixmap;
     m_originalWithGridPixmap = {};
     m_effectPixmap = {};
     m_effectWithGridPixmap = {};
+    m_effectPreviewPixmap = {};
+    m_effectPreviewWithGridPixmap = {};
     m_originalGridImage = {};
     m_modifiedGridImage = {};
     m_appliedSeedChannels.clear();
@@ -406,7 +645,7 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     m_gridRows = 0;
     m_showEffect = true;
     m_showGridLines = true;
-    m_shouldRestoreEffectAfterPress = false;
+    m_highlightEmptyCells = false;
     m_cellWidthPx = 0;
     m_cellHeightPx = 0;
 
@@ -447,8 +686,10 @@ void GridPreviewWindow::updateDisplayedPixmap()
     if (m_showEffect) {
         if (!ensureEffectPixmaps())
             m_showEffect = false;
+        else if (m_showGridLines)
+            displayPixmap = m_effectPreviewWithGridPixmap.isNull() ? m_effectWithGridPixmap : m_effectPreviewWithGridPixmap;
         else
-            displayPixmap = m_showGridLines ? m_effectWithGridPixmap : m_effectPixmap;
+            displayPixmap = m_effectPreviewPixmap.isNull() ? m_effectPixmap : m_effectPreviewPixmap;
     }
 
     if (!m_showEffect) {
@@ -552,7 +793,70 @@ bool GridPreviewWindow::rebuildEffectPixmapsFromModifiedGrid()
     m_effectPixmap = QPixmap::fromImage(effectImage);
     m_effectWithGridPixmap = drawGridLines(m_effectPixmap);
 
+    QImage previewImage = effectImage;
+    if (m_highlightEmptyCells)
+        applyEmptyChannelHighlight(previewImage);
+
+    m_effectPreviewPixmap = QPixmap::fromImage(previewImage);
+    m_effectPreviewWithGridPixmap = drawGridLines(m_effectPreviewPixmap);
+
+    if (m_effectPreviewPixmap.isNull())
+        m_effectPreviewPixmap = m_effectPixmap;
+    if (m_effectPreviewWithGridPixmap.isNull())
+        m_effectPreviewWithGridPixmap = m_effectWithGridPixmap;
+
     return !m_effectPixmap.isNull();
+}
+
+void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
+{
+    if (!m_highlightEmptyCells || image.isNull())
+        return;
+
+    if (m_cellWidthPx <= 0 || m_cellHeightPx <= 0)
+        return;
+
+    if (m_appliedSeedChannels.isEmpty())
+        return;
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    const QColor fillColor(144, 238, 144, 96);
+    const QColor edgeColor(34, 139, 34, 255);
+    const QColor gridColor(34, 139, 34, 180);
+
+    for (int row = 0; row < m_appliedSeedChannels.size(); ++row) {
+        if (row < 0 || row >= m_gridRows)
+            continue;
+
+        const QVector<int> &rowValues = m_appliedSeedChannels.at(row);
+        for (int column = 0; column < rowValues.size(); ++column) {
+            if (rowValues.at(column) != 0)
+                continue;
+
+            const QRect cellRect(column * m_cellWidthPx, row * m_cellHeightPx, m_cellWidthPx, m_cellHeightPx);
+            painter.fillRect(cellRect, fillColor);
+
+            QPen borderPen(edgeColor);
+            borderPen.setWidth(2);
+            borderPen.setJoinStyle(Qt::MiterJoin);
+            painter.setPen(borderPen);
+            painter.drawRect(cellRect.adjusted(0, 0, -1, -1));
+
+            QPen gridPen(gridColor);
+            gridPen.setWidth(1);
+            gridPen.setCapStyle(Qt::SquareCap);
+            gridPen.setJoinStyle(Qt::MiterJoin);
+            painter.setPen(gridPen);
+
+            const int step = std::max(4, std::min(m_cellWidthPx, m_cellHeightPx) / 4);
+            for (int x = cellRect.left() + step; x < cellRect.right(); x += step)
+                painter.drawLine(QPoint(x, cellRect.top()), QPoint(x, cellRect.bottom() - 1));
+            for (int y = cellRect.top() + step; y < cellRect.bottom(); y += step)
+                painter.drawLine(QPoint(cellRect.left(), y), QPoint(cellRect.right() - 1, y));
+        }
+    }
 }
 
 void GridPreviewWindow::updateButtonStates()
@@ -682,9 +986,78 @@ void GridPreviewWindow::connectSeedWidgetSignals(QWidget *widget)
         });
 
     if (auto *combo = seedWidget->channelComboBox())
-        connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int) {
+        connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this, seedWidget](int) {
+            if (m_activeColorPreview == seedWidget->seedColorPreviewLabel())
+                stopColorPicking();
             updateButtonStates();
         });
+
+    if (auto *preview = seedWidget->seedColorPreviewLabel())
+        preview->setClickCallback([this, seedWidget]() {
+            startColorPickingForWidget(seedWidget->seedColorLineEdit(), seedWidget->seedColorPreviewLabel());
+        });
+
+    if (auto *preview = seedWidget->targetColorPreviewLabel())
+        preview->setClickCallback([this, seedWidget]() {
+            startColorPickingForWidget(seedWidget->targetColorLineEdit(), seedWidget->targetColorPreviewLabel());
+        });
+}
+
+void GridPreviewWindow::startColorPickingForWidget(QLineEdit *lineEdit, QLabel *previewLabel)
+{
+    if (!lineEdit || !previewLabel)
+        return;
+
+    if (!lineEdit->isEnabled()) {
+        if (m_activeColorPreview == previewLabel)
+            stopColorPicking();
+        return;
+    }
+
+    if (m_activeColorPreview == previewLabel) {
+        stopColorPicking();
+        return;
+    }
+
+    stopColorPicking();
+
+    if (!m_colorPickerOverlay)
+        m_colorPickerOverlay = std::make_unique<ColorPickerOverlay>(this);
+
+    m_activeColorLineEdit = lineEdit;
+    m_activeColorPreview = previewLabel;
+    m_activePreviewOriginalStyle = previewLabel->styleSheet();
+    previewLabel->setStyleSheet(QStringLiteral("border: 2px solid #1e7f1e;"));
+
+    m_colorPickerOverlay->setCanceledCallback([this]() {
+        stopColorPicking();
+    });
+
+    m_colorPickerOverlay->setColorPickedCallback([this](const QColor &color) {
+        if (m_activeColorLineEdit && color.isValid()) {
+            const QString text = QStringLiteral("%1,%2,%3").arg(color.red()).arg(color.green()).arg(color.blue());
+            m_activeColorLineEdit->setText(text);
+        }
+        stopColorPicking();
+    });
+
+    m_colorPickerOverlay->begin();
+}
+
+void GridPreviewWindow::stopColorPicking()
+{
+    if (m_colorPickerOverlay) {
+        m_colorPickerOverlay->setColorPickedCallback({});
+        m_colorPickerOverlay->setCanceledCallback({});
+        m_colorPickerOverlay->finish();
+    }
+
+    if (m_activeColorPreview)
+        m_activeColorPreview->setStyleSheet(m_activePreviewOriginalStyle);
+
+    m_activePreviewOriginalStyle.clear();
+    m_activeColorLineEdit = nullptr;
+    m_activeColorPreview = nullptr;
 }
 
 void GridPreviewWindow::handleAddSeedClicked()
@@ -790,6 +1163,9 @@ void GridPreviewWindow::handleApplyChangesClicked()
     m_appliedSeedChannels = channelGrid;
     m_effectPixmap = {};
     m_effectWithGridPixmap = {};
+    m_effectPreviewPixmap = {};
+    m_effectPreviewWithGridPixmap = {};
+    m_highlightEmptyCells = true;
 
     if (!rebuildEffectPixmapsFromModifiedGrid()) {
         QMessageBox::warning(this, tr("Apply changes"), tr("Unable to generate the modified image."));
@@ -800,20 +1176,11 @@ void GridPreviewWindow::handleApplyChangesClicked()
     updateDisplayedPixmap();
 }
 
-void GridPreviewWindow::handleSeeEffectPressed()
+void GridPreviewWindow::handleSeeEffectClicked()
 {
-    m_shouldRestoreEffectAfterPress = ensureEffectPixmaps();
-    m_showEffect = false;
-    updateDisplayedPixmap();
-}
-
-void GridPreviewWindow::handleSeeEffectReleased()
-{
-    if (!m_shouldRestoreEffectAfterPress)
-        return;
-
-    m_shouldRestoreEffectAfterPress = false;
-    m_showEffect = true;
+    m_showEffect = !m_showEffect;
+    if (m_showEffect && !ensureEffectPixmaps())
+        m_showEffect = false;
     updateDisplayedPixmap();
 }
 

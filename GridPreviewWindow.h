@@ -7,10 +7,15 @@
 #include <QPixmap>
 #include <QVector>
 
+#include <memory>
+
+class ColorPickerOverlay;
+
 class QLabel;
 class QScrollArea;
 class QPushButton;
 class QListWidget;
+class QLineEdit;
 
 class GridPreviewWindow : public QDialog
 {
@@ -27,6 +32,7 @@ public:
     };
 
     explicit GridPreviewWindow(QWidget *parent = nullptr);
+    ~GridPreviewWindow() override;
 
     void setImageWithGrid(const QPixmap &pixmap, double widthMeters, double heightMeters);
 
@@ -49,10 +55,13 @@ private:
     void handleDeleteSeedClicked();
     void handleApplyChangesClicked();
 
-    void handleSeeEffectPressed();
-    void handleSeeEffectReleased();
+    void handleSeeEffectClicked();
     void handleToggleGridLinesClicked();
     void handleCommitClicked();
+
+    void startColorPickingForWidget(QLineEdit *lineEdit, QLabel *previewLabel);
+    void stopColorPicking();
+    void applyEmptyChannelHighlight(QImage &image) const;
 
     QLabel *m_imageLabel = nullptr;
     QScrollArea *m_scrollArea = nullptr;
@@ -68,18 +77,25 @@ private:
     QPixmap m_originalWithGridPixmap;
     QPixmap m_effectPixmap;
     QPixmap m_effectWithGridPixmap;
+    QPixmap m_effectPreviewPixmap;
+    QPixmap m_effectPreviewWithGridPixmap;
     QImage m_originalGridImage;
     QImage m_modifiedGridImage;
     QVector<QVector<int>> m_appliedSeedChannels;
 
     bool m_showEffect = true;
     bool m_showGridLines = true;
-    bool m_shouldRestoreEffectAfterPress = false;
+    bool m_highlightEmptyCells = false;
 
     int m_cellWidthPx = 0;
     int m_cellHeightPx = 0;
     int m_gridColumns = 0;
     int m_gridRows = 0;
+
+    std::unique_ptr<ColorPickerOverlay> m_colorPickerOverlay;
+    QLineEdit *m_activeColorLineEdit = nullptr;
+    QLabel *m_activeColorPreview = nullptr;
+    QString m_activePreviewOriginalStyle;
 };
 
 #endif // GRIDPREVIEWWINDOW_H
