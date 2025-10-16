@@ -228,9 +228,6 @@ private:
 
 namespace
 {
-
-namespace
-{
 class ColorPreviewLabel : public QLabel
 {
 public:
