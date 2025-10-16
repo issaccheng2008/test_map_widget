@@ -638,7 +638,24 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     contentLayout->addWidget(m_scrollArea, 2);
     contentLayout->addLayout(sideLayout, 1);
 
+    m_paletteContainer = new QWidget(this);
+    auto *paletteLayout = new QVBoxLayout(m_paletteContainer);
+    paletteLayout->setContentsMargins(0, 0, 0, 0);
+    paletteLayout->setSpacing(4);
+
+    m_showPaletteButton = new QPushButton(tr("Show color palette"), m_paletteContainer);
+    m_paletteImageLabel = new QLabel(m_paletteContainer);
+    m_paletteImageLabel->setVisible(false);
+    m_paletteImageLabel->setFrameShape(QFrame::Box);
+    m_paletteImageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_paletteImageLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    paletteLayout->addWidget(m_showPaletteButton);
+    paletteLayout->addWidget(m_paletteImageLabel);
+    m_paletteContainer->setVisible(false);
+
     auto *bottomLayout = new QHBoxLayout();
+    bottomLayout->addWidget(m_paletteContainer);
     bottomLayout->addStretch(1);
     bottomLayout->addWidget(m_commitButton);
 
