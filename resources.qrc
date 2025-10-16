@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>color-picker-dropper-colour-svgrepo-com.png</file>
+        <file>color_gradient_720p_extreme_vibrant.png</file>
+    </qresource>
+</RCC>

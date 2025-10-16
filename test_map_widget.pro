@@ -52,4 +52,7 @@ HEADERS += \
 FORMS += \
     Test_map_widget.ui
 
+RESOURCES += \
+    resources.qrc
+
 #-------------------------------------------------------------------------------
