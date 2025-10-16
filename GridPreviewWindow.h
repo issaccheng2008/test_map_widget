@@ -17,6 +17,7 @@ class QPushButton;
 class QListWidget;
 class QLineEdit;
 class QWidget;
+class QResizeEvent;
 
 class GridPreviewWindow : public QDialog
 {
@@ -65,6 +66,9 @@ private:
     void stopColorPicking();
     void applyEmptyChannelHighlight(QImage &image) const;
     void updateColorSelectionUiState();
+    void updatePalettePanelGeometry();
+
+    void resizeEvent(QResizeEvent *event) override;
 
     QLabel *m_imageLabel = nullptr;
     QScrollArea *m_scrollArea = nullptr;
@@ -77,6 +81,7 @@ private:
     QListWidget *m_seedListWidget = nullptr;
     QWidget *m_paletteContainer = nullptr;
     QPushButton *m_showPaletteButton = nullptr;
+    QPushButton *m_exitColorSelectionButton = nullptr;
     QLabel *m_paletteImageLabel = nullptr;
 
     QPixmap m_originalPixmap;
