@@ -1,5 +1,6 @@
 #include "GridPreviewWindow.h"
 
+#include <QAbstractButton>
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QColor>
@@ -19,6 +20,7 @@
 #include <QPen>
 #include <QPalette>
 #include <QPushButton>
+#include <QPointer>
 #include <QScreen>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -39,6 +41,14 @@ constexpr int kChannelCount = 5;
 
 QCursor createDropperCursor()
 {
+    QPixmap resourcePixmap(QStringLiteral(":/color-picker-dropper-colour-svgrepo-com.png"));
+    if (!resourcePixmap.isNull()) {
+        const QSize desiredSize(32, 32);
+        resourcePixmap = resourcePixmap.scaled(desiredSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const QPoint hotSpot(resourcePixmap.width() - 4, resourcePixmap.height() - 4);
+        return QCursor(resourcePixmap, hotSpot.x(), hotSpot.y());
+    }
+
     QPixmap pixmap(24, 24);
     pixmap.fill(Qt::transparent);
 
@@ -149,30 +159,60 @@ public:
         m_cancelCallback = std::move(callback);
     }
 
+    void setOriginWidget(QWidget *widget)
+    {
+        m_originWidget = widget;
+    }
+
+    void setPaletteButton(QAbstractButton *button)
+    {
+        m_paletteButton = button;
+    }
+
 protected:
     void mousePressEvent(QMouseEvent *event) override
     {
         if (!event)
             return;
 
-        if (event->button() == Qt::RightButton) {
-            const QPoint globalPos = event->globalPosition().toPoint();
+        const QPoint globalPos = event->globalPosition().toPoint();
+
+        if (event->button() == Qt::LeftButton) {
+            if (m_originWidget) {
+                const QRect originRect(m_originWidget->mapToGlobal(QPoint(0, 0)), m_originWidget->size());
+                if (originRect.contains(globalPos)) {
+                    finish();
+                    if (m_cancelCallback)
+                        m_cancelCallback();
+                    event->accept();
+                    return;
+                }
+            }
+
+            if (m_paletteButton && m_paletteButton->isEnabled() && m_paletteButton->isVisible()) {
+                const QRect buttonRect(m_paletteButton->mapToGlobal(QPoint(0, 0)), m_paletteButton->size());
+                if (buttonRect.contains(globalPos)) {
+                    m_paletteButton->animateClick();
+                    event->accept();
+                    return;
+                }
+            }
+
             const QColor picked = grabColorAt(globalPos);
-            finish();
             if (picked.isValid()) {
                 if (m_colorPickedCallback)
                     m_colorPickedCallback(picked);
-            } else if (m_cancelCallback) {
-                m_cancelCallback();
             }
             event->accept();
             return;
         }
 
-        if (event->button() == Qt::LeftButton) {
-            finish();
-            if (m_cancelCallback)
-                m_cancelCallback();
+        if (event->button() == Qt::RightButton) {
+            const QColor picked = grabColorAt(globalPos);
+            if (picked.isValid()) {
+                if (m_colorPickedCallback)
+                    m_colorPickedCallback(picked);
+            }
             event->accept();
             return;
         }
@@ -183,9 +223,6 @@ protected:
     void keyPressEvent(QKeyEvent *event) override
     {
         if (event && event->key() == Qt::Key_Escape) {
-            finish();
-            if (m_cancelCallback)
-                m_cancelCallback();
             event->accept();
             return;
         }
@@ -223,6 +260,8 @@ private:
 
     std::function<void(const QColor &)> m_colorPickedCallback;
     std::function<void()> m_cancelCallback;
+    QPointer<QWidget> m_originWidget;
+    QPointer<QAbstractButton> m_paletteButton;
     bool m_cursorActive = false;
 };
 
@@ -598,7 +637,24 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     contentLayout->addWidget(m_scrollArea, 2);
     contentLayout->addLayout(sideLayout, 1);
 
+    m_paletteContainer = new QWidget(this);
+    auto *paletteLayout = new QVBoxLayout(m_paletteContainer);
+    paletteLayout->setContentsMargins(0, 0, 0, 0);
+    paletteLayout->setSpacing(4);
+
+    m_showPaletteButton = new QPushButton(tr("Show color palette"), m_paletteContainer);
+    m_paletteImageLabel = new QLabel(m_paletteContainer);
+    m_paletteImageLabel->setVisible(false);
+    m_paletteImageLabel->setFrameShape(QFrame::Box);
+    m_paletteImageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_paletteImageLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    paletteLayout->addWidget(m_showPaletteButton);
+    paletteLayout->addWidget(m_paletteImageLabel);
+    m_paletteContainer->setVisible(false);
+
     auto *bottomLayout = new QHBoxLayout();
+    bottomLayout->addWidget(m_paletteContainer);
     bottomLayout->addStretch(1);
     bottomLayout->addWidget(m_commitButton);
 
@@ -611,11 +667,13 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     connect(m_addSeedButton, &QPushButton::clicked, this, &GridPreviewWindow::handleAddSeedClicked);
     connect(m_deleteSeedButton, &QPushButton::clicked, this, &GridPreviewWindow::handleDeleteSeedClicked);
     connect(m_applyChangesButton, &QPushButton::clicked, this, &GridPreviewWindow::handleApplyChangesClicked);
+    connect(m_showPaletteButton, &QPushButton::clicked, this, &GridPreviewWindow::handlePaletteButtonClicked);
     connect(m_seedListWidget, &QListWidget::currentRowChanged, this, [this]() {
         updateButtonStates();
     });
 
     updateButtonStates();
+    updateColorSelectionUiState();
 
     resize(900, 650);
 }
@@ -1026,6 +1084,14 @@ void GridPreviewWindow::startColorPickingForWidget(QLineEdit *lineEdit, QLabel *
     m_activePreviewOriginalStyle = previewLabel->styleSheet();
     previewLabel->setStyleSheet(QStringLiteral("border: 2px solid #1e7f1e;"));
 
+    m_paletteVisible = false;
+    if (m_paletteImageLabel)
+        m_paletteImageLabel->setVisible(false);
+
+    updateColorSelectionUiState();
+    if (m_showPaletteButton)
+        m_showPaletteButton->setText(tr("Show color palette"));
+
     m_colorPickerOverlay->setCanceledCallback([this]() {
         stopColorPicking();
     });
@@ -1035,8 +1101,10 @@ void GridPreviewWindow::startColorPickingForWidget(QLineEdit *lineEdit, QLabel *
             const QString text = QStringLiteral("%1,%2,%3").arg(color.red()).arg(color.green()).arg(color.blue());
             m_activeColorLineEdit->setText(text);
         }
-        stopColorPicking();
     });
+
+    m_colorPickerOverlay->setOriginWidget(previewLabel);
+    m_colorPickerOverlay->setPaletteButton(m_showPaletteButton);
 
     m_colorPickerOverlay->begin();
 }
@@ -1046,6 +1114,8 @@ void GridPreviewWindow::stopColorPicking()
     if (m_colorPickerOverlay) {
         m_colorPickerOverlay->setColorPickedCallback({});
         m_colorPickerOverlay->setCanceledCallback({});
+        m_colorPickerOverlay->setOriginWidget(nullptr);
+        m_colorPickerOverlay->setPaletteButton(nullptr);
         m_colorPickerOverlay->finish();
     }
 
@@ -1055,6 +1125,56 @@ void GridPreviewWindow::stopColorPicking()
     m_activePreviewOriginalStyle.clear();
     m_activeColorLineEdit = nullptr;
     m_activeColorPreview = nullptr;
+
+    m_paletteVisible = false;
+    if (m_paletteImageLabel)
+        m_paletteImageLabel->setVisible(false);
+    updateColorSelectionUiState();
+}
+
+void GridPreviewWindow::updateColorSelectionUiState()
+{
+    const bool picking = m_activeColorPreview != nullptr;
+
+    if (m_paletteContainer)
+        m_paletteContainer->setVisible(picking);
+
+    if (m_showPaletteButton) {
+        if (!picking)
+            m_showPaletteButton->setText(tr("Show color palette"));
+        m_showPaletteButton->setEnabled(picking);
+    }
+
+    if (!picking) {
+        m_paletteVisible = false;
+        if (m_paletteImageLabel)
+            m_paletteImageLabel->setVisible(false);
+    }
+}
+
+void GridPreviewWindow::handlePaletteButtonClicked()
+{
+    if (!m_paletteImageLabel || !m_showPaletteButton)
+        return;
+
+    m_paletteVisible = !m_paletteVisible;
+
+    if (m_paletteVisible) {
+        QPixmap palettePixmap(QStringLiteral(":/color_gradient_720p_extreme_vibrant.png"));
+        if (!palettePixmap.isNull()) {
+            const int maxWidth = 260;
+            const QSize targetSize(maxWidth, static_cast<int>(std::round(maxWidth * palettePixmap.height() / static_cast<double>(palettePixmap.width()))));
+            m_paletteImageLabel->setPixmap(palettePixmap.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            m_paletteImageLabel->adjustSize();
+        } else {
+            m_paletteImageLabel->setPixmap(QPixmap());
+        }
+    }
+
+    if (m_paletteImageLabel)
+        m_paletteImageLabel->setVisible(m_paletteVisible);
+
+    m_showPaletteButton->setText(m_paletteVisible ? tr("Hide color palette") : tr("Show color palette"));
 }
 
 void GridPreviewWindow::handleAddSeedClicked()
