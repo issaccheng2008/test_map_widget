@@ -23,6 +23,7 @@
 #include <QFileInfo>
 #include <QFuture>
 #include <QLineEdit>
+#include <QLocale>
 #include <QPushButton>
 #include <QPolygonF>
 #include <QRegularExpression>
@@ -33,6 +34,7 @@
 #include <QWidget>
 
 // Standard library
+#include <algorithm>
 #include <cmath>
 
 // C++ API headers
@@ -325,6 +327,7 @@ void Test_map_widget::importImage()
         m_isImagePinned = false;
         m_pinnedImageMapPoints.clear();
         m_imageOverlay->setPinnedMode(false);
+        m_hasCommittedGridChanges = false;
         const QFileInfo info(filePath);
         statusBar()->showMessage(tr("Loaded %1. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate.")
                                      .arg(info.fileName()),
@@ -347,6 +350,7 @@ void Test_map_widget::clearImportedImage()
         m_pinnedImageMapPoints.clear();
         g_pinnedImageFootprint.clear();
         g_channelGrid.clear();
+        m_hasCommittedGridChanges = false;
         if (m_gridWindow)
             m_gridWindow->close();
         statusBar()->showMessage(tr("Image removed."), 5000);
@@ -462,8 +466,12 @@ void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap, const QVec
     if (m_isImagePinned)
         updatePinnedImagePosition();
 
+    m_hasCommittedGridChanges = true;
+
     if (statusBar())
         statusBar()->showMessage(tr("Grid effect applied to the pinned image."), 5000);
+
+    updateUiState();
 }
 
 void Test_map_widget::updateUiState()
@@ -476,6 +484,10 @@ void Test_map_widget::updateUiState()
             ui->importImageButton->setText(tr("Load Image"));
             ui->importImageButton->setToolTip(tr("Select an image to display on top of the map"));
             ui->importImageButton->setEnabled(true);
+        } else if (m_hasCommittedGridChanges) {
+            ui->importImageButton->setText(tr("Load Image"));
+            ui->importImageButton->setToolTip(tr("Close the current image before loading a new one."));
+            ui->importImageButton->setEnabled(false);
         } else if (hasPinnedImage) {
             ui->importImageButton->setText(tr("Modify Position"));
             ui->importImageButton->setToolTip(tr("Return the pinned image to modify mode"));
@@ -496,6 +508,8 @@ void Test_map_widget::updateUiState()
 
     if (ui->openGridButton)
         ui->openGridButton->setEnabled(hasPinnedImage);
+
+    updatePlacementInfoPanel(hasImage, hasPinnedImage);
 }
 
 std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() const
@@ -562,13 +576,26 @@ bool Test_map_widget::isCurrentImageAreaAcceptable() const
     return areaOptional && *areaOptional < kMaxAreaSquareMeters;
 }
 
-std::optional<std::pair<double, double>> Test_map_widget::pinnedImageDimensionsMeters() const
+std::optional<std::pair<double, double>> Test_map_widget::currentImageDimensionsMeters() const
 {
-    if (!m_isImagePinned || m_pinnedImageMapPoints.size() < 4)
+    const auto mapPointsOptional = mapPointsForCurrentImageViewport();
+    if (!mapPointsOptional)
         return std::nullopt;
 
-    const int pointCount = m_pinnedImageMapPoints.size();
-    if (pointCount < 4)
+    return imageDimensionsMetersFromMapPoints(*mapPointsOptional);
+}
+
+std::optional<std::pair<double, double>> Test_map_widget::pinnedImageDimensionsMeters() const
+{
+    if (!m_isImagePinned || m_pinnedImageMapPoints.size() < 3)
+        return std::nullopt;
+
+    return imageDimensionsMetersFromMapPoints(m_pinnedImageMapPoints);
+}
+
+std::optional<std::pair<double, double>> Test_map_widget::imageDimensionsMetersFromMapPoints(const QList<Point> &mapPoints) const
+{
+    if (mapPoints.size() < 3)
         return std::nullopt;
 
     const SpatialReference targetReference = SpatialReference::webMercator();
@@ -578,9 +605,9 @@ std::optional<std::pair<double, double>> Test_map_widget::pinnedImageDimensionsM
         return point;
     };
 
-    const Point p0 = projectPoint(m_pinnedImageMapPoints.at(0));
-    const Point p1 = projectPoint(m_pinnedImageMapPoints.at(1 % pointCount));
-    const Point p2 = projectPoint(m_pinnedImageMapPoints.at(2 % pointCount));
+    const Point p0 = projectPoint(mapPoints.at(0));
+    const Point p1 = projectPoint(mapPoints.at(1));
+    const Point p2 = projectPoint(mapPoints.at(2));
 
     const double widthMeters = GeometryEngine::distance(p0, p1);
     const double heightMeters = GeometryEngine::distance(p1, p2);
@@ -589,6 +616,87 @@ std::optional<std::pair<double, double>> Test_map_widget::pinnedImageDimensionsM
         return std::nullopt;
 
     return std::make_pair(widthMeters, heightMeters);
+}
+
+void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImage)
+{
+    if (!ui || !ui->imagePlacementInfoGroup)
+        return;
+
+    const auto resetLabels = [this]() {
+        if (ui->imageWidthValue)
+            ui->imageWidthValue->setText(QStringLiteral("---"));
+        if (ui->imageHeightValue)
+            ui->imageHeightValue->setText(QStringLiteral("---"));
+        if (ui->imageWidthGridValue)
+            ui->imageWidthGridValue->setText(QStringLiteral("---"));
+        if (ui->imageHeightGridValue)
+            ui->imageHeightGridValue->setText(QStringLiteral("---"));
+    };
+
+    const bool showPanel = hasImage && !hasPinnedImage;
+    ui->imagePlacementInfoGroup->setVisible(showPanel);
+
+    if (showPanel) {
+        if (auto *layout = ui->imagePlacementInfoGroup->layout())
+            layout->activate();
+        ui->imagePlacementInfoGroup->adjustSize();
+    }
+
+    if (!showPanel) {
+        resetLabels();
+        return;
+    }
+
+    const auto dimensionsOptional = currentImageDimensionsMeters();
+    const QPixmap currentPixmap = m_imageOverlay ? m_imageOverlay->currentPixmap() : QPixmap();
+
+    const QLocale locale;
+
+    QString widthText = QStringLiteral("---");
+    QString heightText = QStringLiteral("---");
+    QString widthGridText = QStringLiteral("---");
+    QString heightGridText = QStringLiteral("---");
+
+    if (dimensionsOptional) {
+        const double widthMeters = dimensionsOptional->first;
+        const double heightMeters = dimensionsOptional->second;
+
+        widthText = tr("%1 m").arg(locale.toString(widthMeters, 'f', 2));
+        heightText = tr("%1 m").arg(locale.toString(heightMeters, 'f', 2));
+
+        if (!currentPixmap.isNull()) {
+            const auto computeGridCount = [](double lengthMeters, int pixelCount) {
+                if (lengthMeters <= 0.0 || pixelCount <= 0)
+                    return 0;
+
+                const double spacingPx = pixelCount * (kGridSpacingMeters / lengthMeters);
+                if (!std::isfinite(spacingPx) || spacingPx < 1.0)
+                    return 0;
+
+                const int cellWidthPx = std::max(1, static_cast<int>(std::round(spacingPx)));
+                if (cellWidthPx <= 0)
+                    return 0;
+
+                return pixelCount / cellWidthPx;
+            };
+
+            const int widthGrid = computeGridCount(widthMeters, currentPixmap.width());
+            const int heightGrid = computeGridCount(heightMeters, currentPixmap.height());
+
+            widthGridText = locale.toString(widthGrid);
+            heightGridText = locale.toString(heightGrid);
+        }
+    }
+
+    if (ui->imageWidthValue)
+        ui->imageWidthValue->setText(widthText);
+    if (ui->imageHeightValue)
+        ui->imageHeightValue->setText(heightText);
+    if (ui->imageWidthGridValue)
+        ui->imageWidthGridValue->setText(widthGridText);
+    if (ui->imageHeightGridValue)
+        ui->imageHeightGridValue->setText(heightGridText);
 }
 
 void Test_map_widget::startObstacleCapture()

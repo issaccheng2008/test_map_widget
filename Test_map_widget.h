@@ -76,7 +76,10 @@ private:
     std::optional<QList<Esri::ArcGISRuntime::Point>> mapPointsForCurrentImageViewport() const;
     std::optional<double> currentImageAreaSquareMeters() const;
     bool isCurrentImageAreaAcceptable() const;
+    std::optional<std::pair<double, double>> currentImageDimensionsMeters() const;
     std::optional<std::pair<double, double>> pinnedImageDimensionsMeters() const;
+    std::optional<std::pair<double, double>> imageDimensionsMetersFromMapPoints(const QList<Esri::ArcGISRuntime::Point> &mapPoints) const;
+    void updatePlacementInfoPanel(bool hasImage, bool hasPinnedImage);
     void updateCursorCoordinateDisplay(const QPoint &screenPoint);
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
@@ -90,6 +93,7 @@ private:
     bool m_isCapturingObstacle = false;
     QList<Esri::ArcGISRuntime::Point> m_pinnedImageMapPoints;
     bool m_isImagePinned = false;
+    bool m_hasCommittedGridChanges = false;
     QPointer<GridPreviewWindow> m_gridWindow;
 
     Ui::Test_map_widget *ui = nullptr;
