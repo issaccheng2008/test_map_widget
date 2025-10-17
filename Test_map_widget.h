@@ -63,6 +63,7 @@ private slots:
     void setImagePosition();
     void openGridPreview();
     void applyCommittedGridEffect(const QPixmap &pixmap, const QVector<QVector<int>> &seedChannels);
+    void handleObstacleActionButton();
     void startObstacleCapture();
     void finishObstacleCapture();
     void cancelObstacleCapture();

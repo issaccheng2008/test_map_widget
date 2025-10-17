@@ -189,13 +189,6 @@ Lon: ---</string>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="finishObstacleButton">
-            <property name="text">
-             <string>Finish</string>
-            </property>
-           </widget>
-          </item>
-          <item>
            <widget class="QPushButton" name="cancelObstacleButton">
             <property name="text">
              <string>Cancel</string>
