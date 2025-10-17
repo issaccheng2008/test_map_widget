@@ -81,6 +81,7 @@ private:
     std::optional<std::pair<double, double>> imageDimensionsMetersFromMapPoints(const QList<Esri::ArcGISRuntime::Point> &mapPoints) const;
     void updatePlacementInfoPanel(bool hasImage, bool hasPinnedImage);
     void updateCursorCoordinateDisplay(const QPoint &screenPoint);
+    void adjustSideScrollAreaGeometry();
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
@@ -97,6 +98,8 @@ private:
     QPointer<GridPreviewWindow> m_gridWindow;
 
     Ui::Test_map_widget *ui = nullptr;
+    int m_initialSideScrollWidth = -1;
+    bool m_isAdjustingSideScrollGeometry = false;
 };
 
 #endif // TEST_MAP_WIDGET_H
