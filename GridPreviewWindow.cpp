@@ -15,12 +15,15 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QPolygonF>
+#include <QTransform>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
 #include <QPalette>
 #include <QPushButton>
 #include <QPointer>
+#include <QDebug>
 #include <QScreen>
 #include <QResizeEvent>
 #include <QMargins>
@@ -35,6 +38,10 @@
 #include <functional>
 #include <limits>
 #include <optional>
+
+#include "GridState.h"
+#include "Test_map_widget.h"
+#include "Point.h"
 
 namespace
 {
@@ -730,6 +737,7 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     m_originalGridImage = {};
     m_modifiedGridImage = {};
     m_appliedSeedChannels.clear();
+    m_obstacleCellsMask.clear();
     m_gridColumns = 0;
     m_gridRows = 0;
     m_showEffect = true;
@@ -861,6 +869,11 @@ bool GridPreviewWindow::ensureOriginalGridImage()
     m_modifiedGridImage = reduced;
     m_appliedSeedChannels = QVector<QVector<int>>(m_gridRows, QVector<int>(m_gridColumns, 0));
 
+    updateObstacleMask();
+    applyObstacleMaskToGrid(m_appliedSeedChannels);
+    applyObstacleTransparencyToImage(m_modifiedGridImage);
+    g_channelGrid = m_appliedSeedChannels;
+
     return true;
 }
 
@@ -868,6 +881,8 @@ bool GridPreviewWindow::rebuildEffectPixmapsFromModifiedGrid()
 {
     if (m_modifiedGridImage.isNull() || m_cellWidthPx <= 0 || m_cellHeightPx <= 0 || m_gridColumns <= 0 || m_gridRows <= 0)
         return false;
+
+    applyObstacleMaskToGrid(m_appliedSeedChannels);
 
     const int cropWidth = m_gridColumns * m_cellWidthPx;
     const int cropHeight = m_gridRows * m_cellHeightPx;
@@ -879,12 +894,16 @@ bool GridPreviewWindow::rebuildEffectPixmapsFromModifiedGrid()
     if (effectImage.format() != QImage::Format_ARGB32)
         effectImage = effectImage.convertToFormat(QImage::Format_ARGB32);
 
-    m_effectPixmap = QPixmap::fromImage(effectImage);
+    QImage committedImage = effectImage;
+    applyObstacleHighlight(committedImage, false);
+
+    m_effectPixmap = QPixmap::fromImage(committedImage);
     m_effectWithGridPixmap = drawGridLines(m_effectPixmap);
 
     QImage previewImage = effectImage;
     if (m_highlightEmptyCells)
         applyEmptyChannelHighlight(previewImage);
+    applyObstacleHighlight(previewImage, true);
 
     m_effectPreviewPixmap = QPixmap::fromImage(previewImage);
     m_effectPreviewWithGridPixmap = drawGridLines(m_effectPreviewPixmap);
@@ -902,6 +921,27 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
     if (!m_highlightEmptyCells || image.isNull())
         return;
 
+    const QColor fillColor(144, 238, 144, 96);
+    const QColor edgeColor(34, 139, 34, 255);
+    drawCellHighlightsForValue(image, 0, fillColor, edgeColor, true);
+}
+
+void GridPreviewWindow::applyObstacleHighlight(QImage &image, bool drawFill) const
+{
+    if (image.isNull())
+        return;
+
+    const QColor fillColor = drawFill ? QColor(255, 0, 0, 96) : QColor(0, 0, 0, 0);
+    const QColor edgeColor(220, 20, 60, 255);
+    drawCellHighlightsForValue(image, -1, fillColor, edgeColor, drawFill);
+}
+
+void GridPreviewWindow::drawCellHighlightsForValue(QImage &image, int cellValue, const QColor &fillColor,
+                                                   const QColor &edgeColor, bool drawFill) const
+{
+    if (image.isNull())
+        return;
+
     if (m_cellWidthPx <= 0 || m_cellHeightPx <= 0)
         return;
 
@@ -911,10 +951,7 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
     QPainter painter(&image);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    const QColor fillColor(144, 238, 144, 96);
-    const QColor edgeColor(34, 139, 34, 255);
-
-    const auto isEmptyCell = [&](int rowIndex, int columnIndex) -> bool {
+    const auto matchesValue = [&](int rowIndex, int columnIndex) -> bool {
         if (rowIndex < 0 || rowIndex >= m_appliedSeedChannels.size())
             return false;
 
@@ -922,7 +959,7 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
         if (columnIndex < 0 || columnIndex >= rowValues.size())
             return false;
 
-        return rowValues.at(columnIndex) == 0;
+        return rowValues.at(columnIndex) == cellValue;
     };
 
     for (int row = 0; row < m_appliedSeedChannels.size(); ++row) {
@@ -931,12 +968,15 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
 
         const QVector<int> &rowValues = m_appliedSeedChannels.at(row);
         for (int column = 0; column < rowValues.size(); ++column) {
-            if (rowValues.at(column) != 0)
+            if (rowValues.at(column) != cellValue)
                 continue;
 
             const QRect cellRect(column * m_cellWidthPx, row * m_cellHeightPx, m_cellWidthPx, m_cellHeightPx);
-            painter.setPen(Qt::NoPen);
-            painter.fillRect(cellRect, fillColor);
+
+            if (drawFill && fillColor.alpha() > 0) {
+                painter.setPen(Qt::NoPen);
+                painter.fillRect(cellRect, fillColor);
+            }
 
             QPen borderPen(edgeColor);
             borderPen.setWidthF(1.0);
@@ -948,16 +988,142 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
             const int top = cellRect.top();
             const int bottom = cellRect.bottom() - 1;
 
-            if (!isEmptyCell(row, column - 1))
+            if (!matchesValue(row, column - 1))
                 painter.drawLine(QPoint(left, top), QPoint(left, bottom));
-            if (!isEmptyCell(row, column + 1))
+            if (!matchesValue(row, column + 1))
                 painter.drawLine(QPoint(right, top), QPoint(right, bottom));
-            if (!isEmptyCell(row - 1, column))
+            if (!matchesValue(row - 1, column))
                 painter.drawLine(QPoint(left, top), QPoint(right, top));
-            if (!isEmptyCell(row + 1, column))
+            if (!matchesValue(row + 1, column))
                 painter.drawLine(QPoint(left, bottom), QPoint(right, bottom));
         }
     }
+}
+
+void GridPreviewWindow::applyObstacleMaskToGrid(QVector<QVector<int>> &grid) const
+{
+    if (grid.isEmpty() || m_obstacleCellsMask.isEmpty())
+        return;
+
+    const int rowCount = std::min(grid.size(), m_obstacleCellsMask.size());
+    for (int row = 0; row < rowCount; ++row) {
+        QVector<int> &gridRow = grid[row];
+        const QVector<bool> &maskRow = m_obstacleCellsMask.at(row);
+        const int columnCount = std::min(gridRow.size(), maskRow.size());
+        for (int column = 0; column < columnCount; ++column) {
+            if (maskRow.at(column))
+                gridRow[column] = -1;
+        }
+    }
+}
+
+void GridPreviewWindow::applyObstacleTransparencyToImage(QImage &image) const
+{
+    if (image.isNull())
+        return;
+
+    if (image.width() != m_gridColumns || image.height() != m_gridRows)
+        return;
+
+    const int rowCount = std::min(m_gridRows, m_obstacleCellsMask.size());
+    for (int row = 0; row < rowCount; ++row) {
+        const QVector<bool> &maskRow = m_obstacleCellsMask.at(row);
+        const int columnCount = std::min(m_gridColumns, maskRow.size());
+        for (int column = 0; column < columnCount; ++column) {
+            if (maskRow.at(column))
+                image.setPixelColor(column, row, QColor(0, 0, 0, 0));
+        }
+    }
+}
+
+void GridPreviewWindow::updateObstacleMask()
+{
+    if (m_gridColumns <= 0 || m_gridRows <= 0) {
+        m_obstacleCellsMask.clear();
+        return;
+    }
+
+    m_obstacleCellsMask = QVector<QVector<bool>>(m_gridRows, QVector<bool>(m_gridColumns, false));
+
+    if (m_cellWidthPx <= 0 || m_cellHeightPx <= 0)
+        return;
+
+    if (m_originalPixmap.isNull())
+        return;
+
+    if (g_pinnedImageFootprint.size() < 4)
+        return;
+
+    if (obstaclesList.isEmpty())
+        return;
+
+    QPolygonF mapQuad;
+    mapQuad.reserve(4);
+    for (int i = 0; i < 4; ++i)
+        mapQuad << g_pinnedImageFootprint.at(i % g_pinnedImageFootprint.size());
+
+    QPolygonF imageQuad;
+    imageQuad << QPointF(0, 0)
+              << QPointF(m_originalPixmap.width(), 0)
+              << QPointF(m_originalPixmap.width(), m_originalPixmap.height())
+              << QPointF(0, m_originalPixmap.height());
+
+    QTransform transform;
+    if (!QTransform::quadToQuad(mapQuad, imageQuad, transform))
+        return;
+
+    const QRectF imageBounds(0.0, 0.0, m_gridColumns * m_cellWidthPx, m_gridRows * m_cellHeightPx);
+
+    for (const obstacles &obstacle : obstaclesList) {
+        if (obstacle.vertices.size() < 3)
+            continue;
+
+        QPolygonF imagePolygon;
+        imagePolygon.reserve(obstacle.vertices.size());
+        for (const Esri::ArcGISRuntime::Point &vertex : obstacle.vertices)
+            imagePolygon << transform.map(QPointF(vertex.x(), vertex.y()));
+
+        if (imagePolygon.size() < 3)
+            continue;
+
+        QPainterPath polygonPath;
+        polygonPath.addPolygon(imagePolygon);
+        polygonPath.closeSubpath();
+
+        QRectF polygonBounds = polygonPath.boundingRect().intersected(imageBounds);
+        if (polygonBounds.isEmpty())
+            continue;
+
+        const int minColumn = std::clamp(static_cast<int>(std::floor(polygonBounds.left() / m_cellWidthPx)), 0, m_gridColumns - 1);
+        const int maxColumn = std::clamp(static_cast<int>(std::ceil(polygonBounds.right() / m_cellWidthPx)) - 1, 0, m_gridColumns - 1);
+        const int minRow = std::clamp(static_cast<int>(std::floor(polygonBounds.top() / m_cellHeightPx)), 0, m_gridRows - 1);
+        const int maxRow = std::clamp(static_cast<int>(std::ceil(polygonBounds.bottom() / m_cellHeightPx)) - 1, 0, m_gridRows - 1);
+
+        for (int row = minRow; row <= maxRow; ++row) {
+            for (int column = minColumn; column <= maxColumn; ++column) {
+                QRectF cellRect(column * m_cellWidthPx, row * m_cellHeightPx, m_cellWidthPx, m_cellHeightPx);
+                QPainterPath cellPath;
+                cellPath.addRect(cellRect);
+
+                if (polygonPath.intersects(cellPath) || polygonPath.contains(cellRect.center())) {
+                    if (row >= 0 && row < m_obstacleCellsMask.size() && column >= 0 && column < m_obstacleCellsMask[row].size())
+                        m_obstacleCellsMask[row][column] = true;
+                }
+            }
+        }
+    }
+}
+
+bool GridPreviewWindow::cellHasObstacle(int row, int column) const
+{
+    if (row < 0 || row >= m_obstacleCellsMask.size())
+        return false;
+
+    const QVector<bool> &maskRow = m_obstacleCellsMask.at(row);
+    if (column < 0 || column >= maskRow.size())
+        return false;
+
+    return maskRow.at(column);
 }
 
 void GridPreviewWindow::updateButtonStates()
@@ -1324,8 +1490,16 @@ void GridPreviewWindow::handleApplyChangesClicked()
 
     QVector<QVector<int>> channelGrid(m_gridRows, QVector<int>(m_gridColumns, 0));
 
+    updateObstacleMask();
+
     for (int y = 0; y < m_gridRows; ++y) {
         for (int x = 0; x < m_gridColumns; ++x) {
+            if (cellHasObstacle(y, x)) {
+                newGrid.setPixelColor(x, y, QColor(0, 0, 0, 0));
+                channelGrid[y][x] = -1;
+                continue;
+            }
+
             const QColor oriColor = QColor::fromRgba(m_originalGridImage.pixel(x, y));
 
             double bestValue = std::numeric_limits<double>::infinity();
@@ -1362,7 +1536,21 @@ void GridPreviewWindow::handleApplyChangesClicked()
         }
     }
 
+    applyObstacleMaskToGrid(channelGrid);
+    applyObstacleTransparencyToImage(newGrid);
+
     m_modifiedGridImage = newGrid;
+    g_channelGrid = channelGrid;
+
+    qDebug().noquote() << "Channel grid:";
+    for (const QVector<int> &row : g_channelGrid) {
+        QStringList values;
+        values.reserve(row.size());
+        for (int value : row)
+            values << QString::number(value);
+        qDebug().noquote() << values.join(QLatin1Char(' '));
+    }
+
     m_appliedSeedChannels = channelGrid;
     m_effectPixmap = {};
     m_effectWithGridPixmap = {};

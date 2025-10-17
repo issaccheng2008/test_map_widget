@@ -47,7 +47,8 @@ SOURCES += \
 HEADERS += \
     Test_map_widget.h \
     OverlayImageWidget.h \
-    GridPreviewWindow.h
+    GridPreviewWindow.h \
+    GridState.h
 
 FORMS += \
     Test_map_widget.ui
