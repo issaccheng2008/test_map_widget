@@ -394,6 +394,14 @@ void Test_map_widget::importImage()
         m_pinnedImageMapPoints.clear();
         m_imageOverlay->setPinnedMode(false);
         m_hasCommittedGridChanges = false;
+        m_originalImagePixmap = m_imageOverlay->currentPixmap();
+        ++m_imageSessionCounter;
+        m_currentImageSessionId = m_imageSessionCounter;
+        m_gridWindowImageSessionId = 0;
+        if (m_gridWindow) {
+            m_gridWindow->resetState();
+            m_gridWindow->hide();
+        }
         const QFileInfo info(filePath);
         statusBar()->showMessage(tr("Loaded %1. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate.")
                                      .arg(info.fileName()),
@@ -417,8 +425,13 @@ void Test_map_widget::clearImportedImage()
         g_pinnedImageFootprint.clear();
         g_channelGrid.clear();
         m_hasCommittedGridChanges = false;
-        if (m_gridWindow)
-            m_gridWindow->close();
+        m_originalImagePixmap = QPixmap();
+        m_currentImageSessionId = 0;
+        m_gridWindowImageSessionId = 0;
+        if (m_gridWindow) {
+            m_gridWindow->resetState();
+            m_gridWindow->hide();
+        }
         statusBar()->showMessage(tr("Image removed."), 5000);
     }
 
@@ -452,6 +465,13 @@ void Test_map_widget::setImagePosition()
     m_isImagePinned = true;
     m_imageOverlay->setPinnedMode(true);
     updatePinnedImagePosition();
+    ++m_imageSessionCounter;
+    m_currentImageSessionId = m_imageSessionCounter;
+    m_gridWindowImageSessionId = 0;
+    if (m_gridWindow) {
+        m_gridWindow->resetState();
+        m_gridWindow->hide();
+    }
     statusBar()->showMessage(tr("Image pinned to the map. It will follow as you move and zoom."), 5000);
     updateUiState();
 }
@@ -504,8 +524,10 @@ void Test_map_widget::openGridPreview()
 
     if (!m_gridWindow) {
         m_gridWindow = new GridPreviewWindow(this);
-        m_gridWindow->setAttribute(Qt::WA_DeleteOnClose, true);
-        connect(m_gridWindow, &QObject::destroyed, this, [this]() { m_gridWindow = nullptr; });
+        connect(m_gridWindow, &QObject::destroyed, this, [this]() {
+            m_gridWindow = nullptr;
+            m_gridWindowImageSessionId = 0;
+        });
         connect(m_gridWindow, &GridPreviewWindow::effectCommitted, this,
                 &Test_map_widget::applyCommittedGridEffect);
     }
@@ -515,7 +537,18 @@ void Test_map_widget::openGridPreview()
     for (const Point &point : m_pinnedImageMapPoints)
         g_pinnedImageFootprint << QPointF(point.x(), point.y());
 
-    m_gridWindow->setImageWithGrid(pixmap, dimensions->first, dimensions->second);
+    if (m_originalImagePixmap.isNull() && !pixmap.isNull() && !m_hasCommittedGridChanges)
+        m_originalImagePixmap = pixmap;
+
+    const bool needsInitialization = !m_gridWindow->hasSession() ||
+                                     m_gridWindowImageSessionId != m_currentImageSessionId;
+
+    if (needsInitialization) {
+        const QPixmap basePixmap = m_originalImagePixmap.isNull() ? pixmap : m_originalImagePixmap;
+        m_gridWindow->setImageWithGrid(basePixmap, dimensions->first, dimensions->second);
+        m_gridWindowImageSessionId = m_currentImageSessionId;
+    }
+
     m_gridWindow->show();
     m_gridWindow->raise();
     m_gridWindow->activateWindow();

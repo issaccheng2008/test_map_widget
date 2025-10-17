@@ -23,9 +23,11 @@ class Point;
 #include <QMainWindow>
 #include <QList>
 #include <QPoint>
+#include <QPixmap>
 #include <QPointer>
 #include <QVector>
 
+#include <QtGlobal>
 #include <optional>
 #include <utility>
 
@@ -96,6 +98,10 @@ private:
     bool m_isImagePinned = false;
     bool m_hasCommittedGridChanges = false;
     QPointer<GridPreviewWindow> m_gridWindow;
+    QPixmap m_originalImagePixmap;
+    quint64 m_imageSessionCounter = 0;
+    quint64 m_currentImageSessionId = 0;
+    quint64 m_gridWindowImageSessionId = 0;
 
     Ui::Test_map_widget *ui = nullptr;
     int m_initialSideScrollWidth = -1;

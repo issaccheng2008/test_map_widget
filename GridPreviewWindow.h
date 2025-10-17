@@ -39,6 +39,8 @@ public:
     ~GridPreviewWindow() override;
 
     void setImageWithGrid(const QPixmap &pixmap, double widthMeters, double heightMeters);
+    void resetState();
+    [[nodiscard]] bool hasSession() const;
 
 signals:
     void effectCommitted(const QPixmap &pixmap, const QVector<QVector<int>> &seedChannels);
