@@ -166,9 +166,9 @@ void Test_map_widget::goToCoordinates()
     m_mapView->setViewpointCenterAsync(location, zoomScale);
     statusBar()->showMessage(tr("Zoomed to %1, %2").arg(latitude, 0, 'f', 4).arg(longitude, 0, 'f', 4), 5000);
 
-    const Point endlocation(longitude,latitude+1,SpatialReference::wgs84());
+    // const Point endlocation(longitude,latitude+1,SpatialReference::wgs84());
 
-    drawLineBetweenCoordinates(location,endlocation);
+    // drawLineBetweenCoordinates(location,endlocation);
 
 }
 
