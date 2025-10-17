@@ -723,6 +723,54 @@ GridPreviewWindow::~GridPreviewWindow()
     stopColorPicking();
 }
 
+void GridPreviewWindow::resetState()
+{
+    stopColorPicking();
+
+    m_originalPixmap = {};
+    m_originalWithGridPixmap = {};
+    m_effectPixmap = {};
+    m_effectWithGridPixmap = {};
+    m_effectPreviewPixmap = {};
+    m_effectPreviewWithGridPixmap = {};
+    m_originalGridImage = {};
+    m_modifiedGridImage = {};
+    m_appliedSeedChannels.clear();
+    m_obstacleCellsMask.clear();
+
+    m_showEffect = true;
+    m_showGridLines = true;
+    m_highlightEmptyCells = false;
+
+    m_cellWidthPx = 0;
+    m_cellHeightPx = 0;
+    m_gridColumns = 0;
+    m_gridRows = 0;
+
+    if (m_seedListWidget)
+        m_seedListWidget->clear();
+
+    if (m_imageLabel)
+        m_imageLabel->clear();
+
+    m_paletteVisible = false;
+    if (m_paletteImageLabel)
+        m_paletteImageLabel->setVisible(false);
+    if (m_paletteFrame)
+        m_paletteFrame->setVisible(false);
+    if (m_showPaletteButton)
+        m_showPaletteButton->setText(tr("Show color palette"));
+
+    updateButtonStates();
+    updateColorSelectionUiState();
+    updatePalettePanelGeometry();
+}
+
+bool GridPreviewWindow::hasSession() const
+{
+    return !m_originalPixmap.isNull() && m_gridColumns > 0 && m_gridRows > 0;
+}
+
 void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMeters, double heightMeters)
 {
     stopColorPicking();
