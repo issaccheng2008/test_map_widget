@@ -32,6 +32,7 @@
 #include <QEvent>
 #include <QMouseEvent>
 #include <QWidget>
+#include <QMenuBar>
 
 // Standard library
 #include <algorithm>
@@ -69,6 +70,9 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     , ui(new Ui::Test_map_widget)
 {
     ui->setupUi(this);
+
+    if (QMenuBar *menu = menuBar())
+        menu->raise();
 
     // Create a map using the ArcGISImagery BasemapStyle
     m_map = new Map(BasemapStyle::ArcGISImagery, this);
