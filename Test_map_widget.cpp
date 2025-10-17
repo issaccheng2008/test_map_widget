@@ -31,10 +31,7 @@
 #include <QStatusBar>
 #include <QStringList>
 #include <QEvent>
-#include <QMargins>
 #include <QMouseEvent>
-#include <QScrollBar>
-#include <QScopedValueRollback>
 #include <QWidget>
 
 // Standard library
@@ -74,15 +71,8 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
 {
     ui->setupUi(this);
 
-    if (ui->sideScrollArea) {
+    if (ui->sideScrollArea)
         ui->sideScrollArea->setSizeAdjustPolicy(QAbstractScrollArea::AdjustToContents);
-        if (QWidget *sidePanel = ui->sideScrollArea->widget())
-            sidePanel->installEventFilter(this);
-
-        m_initialSideScrollWidth = ui->sideScrollArea->sizeHint().width();
-        if (m_initialSideScrollWidth <= 0)
-            m_initialSideScrollWidth = ui->sideScrollArea->size().width();
-    }
 
     // Create a map using the ArcGISImagery BasemapStyle
     m_map = new Map(BasemapStyle::ArcGISImagery, this);
@@ -135,18 +125,12 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 
-    adjustSideScrollAreaGeometry();
     updateUiState();
 }
 
 Test_map_widget::~Test_map_widget()
 {
     if (ui) {
-        if (ui->sideScrollArea) {
-            if (QWidget *sidePanel = ui->sideScrollArea->widget())
-                sidePanel->removeEventFilter(this);
-        }
-
         delete ui;
         ui = nullptr;
     }
@@ -281,11 +265,6 @@ bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    if (ui && ui->sideScrollArea && watched == ui->sideScrollArea->widget()) {
-        if (event->type() == QEvent::LayoutRequest || event->type() == QEvent::Resize)
-            adjustSideScrollAreaGeometry();
-    }
-
     return QMainWindow::eventFilter(watched, event);
 }
 
@@ -325,44 +304,6 @@ void Test_map_widget::updateCursorCoordinateDisplay(const QPoint &screenPoint)
     const double latitude = geographicPoint.y();
     const double longitude = geographicPoint.x();
     ui->cursorCoordinateValue->setText(tr("Lat: %1\nLon: %2").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6));
-}
-
-void Test_map_widget::adjustSideScrollAreaGeometry()
-{
-    if (!ui || !ui->sideScrollArea)
-        return;
-
-    QWidget *sidePanel = ui->sideScrollArea->widget();
-    if (!sidePanel)
-        return;
-
-    if (m_isAdjustingSideScrollGeometry)
-        return;
-
-    QScopedValueRollback<bool> guard(m_isAdjustingSideScrollGeometry, true);
-
-    if (m_initialSideScrollWidth < 0) {
-        m_initialSideScrollWidth = ui->sideScrollArea->sizeHint().width();
-        if (m_initialSideScrollWidth <= 0)
-            m_initialSideScrollWidth = ui->sideScrollArea->size().width();
-    }
-
-    sidePanel->updateGeometry();
-    sidePanel->adjustSize();
-
-    const int frameWidth = ui->sideScrollArea->frameWidth();
-    const QMargins margins = ui->sideScrollArea->contentsMargins();
-    int verticalScrollBarWidth = 0;
-    if (QScrollBar *verticalBar = ui->sideScrollArea->verticalScrollBar()) {
-        if (verticalBar->isVisible())
-            verticalScrollBarWidth = verticalBar->sizeHint().width();
-    }
-
-    const int desiredWidth = sidePanel->sizeHint().width() + (frameWidth * 2) + margins.left() + margins.right() + verticalScrollBarWidth;
-    const int finalWidth = std::max(desiredWidth, m_initialSideScrollWidth);
-
-    ui->sideScrollArea->setMinimumWidth(finalWidth);
-    ui->sideScrollArea->setMaximumWidth(finalWidth);
 }
 
 void Test_map_widget::importImage()
@@ -722,17 +663,19 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
     if (!ui || !ui->imagePlacementInfoGroup)
         return;
 
-    const auto resetLabels = [this]() {
-        if (ui->imageWidthValue)
-            ui->imageWidthValue->setText(QStringLiteral("---"));
-        if (ui->imageHeightValue)
-            ui->imageHeightValue->setText(QStringLiteral("---"));
-        if (ui->imageWidthGridValue)
-            ui->imageWidthGridValue->setText(QStringLiteral("---"));
-        if (ui->imageHeightGridValue)
-            ui->imageHeightGridValue->setText(QStringLiteral("---"));
+    const auto setPlacementInfoText = [this](const QString &widthText,
+                                             const QString &heightText,
+                                             const QString &widthGridText,
+                                             const QString &heightGridText) {
+        if (!ui->imagePlacementInfoValue)
+            return;
+
+        const QString formattedText = tr("Width: %1\nHeight: %2\nWidth grid #: %3\nHeight grid #: %4")
+                                          .arg(widthText, heightText, widthGridText, heightGridText);
+        ui->imagePlacementInfoValue->setText(formattedText);
     };
 
+    const QString placeholder = QStringLiteral("---");
     const bool showPanel = hasImage && !hasPinnedImage;
     ui->imagePlacementInfoGroup->setVisible(showPanel);
 
@@ -740,11 +683,8 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
         if (auto *layout = ui->imagePlacementInfoGroup->layout())
             layout->activate();
         ui->imagePlacementInfoGroup->adjustSize();
-    }
-
-    if (!showPanel) {
-        resetLabels();
-        adjustSideScrollAreaGeometry();
+    } else {
+        setPlacementInfoText(placeholder, placeholder, placeholder, placeholder);
         return;
     }
 
@@ -789,16 +729,7 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
         }
     }
 
-    if (ui->imageWidthValue)
-        ui->imageWidthValue->setText(widthText);
-    if (ui->imageHeightValue)
-        ui->imageHeightValue->setText(heightText);
-    if (ui->imageWidthGridValue)
-        ui->imageWidthGridValue->setText(widthGridText);
-    if (ui->imageHeightGridValue)
-        ui->imageHeightGridValue->setText(heightGridText);
-
-    adjustSideScrollAreaGeometry();
+    setPlacementInfoText(widthText, heightText, widthGridText, heightGridText);
 }
 
 void Test_map_widget::startObstacleCapture()
