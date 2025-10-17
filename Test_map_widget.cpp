@@ -15,6 +15,7 @@
 
 #include "OverlayImageWidget.h"
 #include "GridPreviewWindow.h"
+#include "GridState.h"
 
 // Qt headers
 #include <QColor>
@@ -56,6 +57,8 @@
 #include "ui_Test_map_widget.h"
 
 QList<obstacles> obstaclesList;
+QVector<QVector<int>> g_channelGrid;
+QPolygonF g_pinnedImageFootprint;
 
 using namespace Esri::ArcGISRuntime;
 
@@ -342,6 +345,8 @@ void Test_map_widget::clearImportedImage()
         m_imageOverlay->clearImage();
         m_isImagePinned = false;
         m_pinnedImageMapPoints.clear();
+        g_pinnedImageFootprint.clear();
+        g_channelGrid.clear();
         if (m_gridWindow)
             m_gridWindow->close();
         statusBar()->showMessage(tr("Image removed."), 5000);
@@ -435,6 +440,11 @@ void Test_map_widget::openGridPreview()
                 &Test_map_widget::applyCommittedGridEffect);
     }
 
+    g_pinnedImageFootprint.clear();
+    g_pinnedImageFootprint.reserve(m_pinnedImageMapPoints.size());
+    for (const Point &point : m_pinnedImageMapPoints)
+        g_pinnedImageFootprint << QPointF(point.x(), point.y());
+
     m_gridWindow->setImageWithGrid(pixmap, dimensions->first, dimensions->second);
     m_gridWindow->show();
     m_gridWindow->raise();
@@ -446,10 +456,7 @@ void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap, const QVec
     if (!m_imageOverlay || pixmap.isNull())
         return;
 
-    seedChannelGrid.clear();
-    seedChannelGrid.reserve(seedChannels.size());
-    for (const QVector<int> &row : seedChannels)
-        seedChannelGrid.emplace_back(row.begin(), row.end());
+    g_channelGrid = seedChannels;
 
     m_imageOverlay->setCurrentPixmap(pixmap);
     if (m_isImagePinned)

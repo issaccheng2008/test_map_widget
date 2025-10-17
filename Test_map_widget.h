@@ -28,7 +28,6 @@ class Point;
 
 #include <optional>
 #include <utility>
-#include <vector>
 
 class OverlayImageWidget;
 class GridPreviewWindow;
@@ -51,8 +50,6 @@ class Test_map_widget : public QMainWindow
 public:
     explicit Test_map_widget(QWidget *parent = nullptr);
     ~Test_map_widget() override;
-
-    std::vector<std::vector<int>> seedChannelGrid;
 
     void drawLineBetweenCoordinates(const Esri::ArcGISRuntime::Point &start,
                                     const Esri::ArcGISRuntime::Point &end);

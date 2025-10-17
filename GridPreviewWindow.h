@@ -67,6 +67,13 @@ private:
     void startColorPickingForWidget(QLineEdit *lineEdit, QLabel *previewLabel);
     void stopColorPicking();
     void applyEmptyChannelHighlight(QImage &image) const;
+    void applyObstacleHighlight(QImage &image, bool drawFill) const;
+    void drawCellHighlightsForValue(QImage &image, int cellValue, const QColor &fillColor, const QColor &edgeColor,
+                                    bool drawFill) const;
+    void applyObstacleMaskToGrid(QVector<QVector<int>> &grid) const;
+    void applyObstacleTransparencyToImage(QImage &image) const;
+    void updateObstacleMask();
+    bool cellHasObstacle(int row, int column) const;
     void updateColorSelectionUiState();
     void updatePalettePanelGeometry();
 
@@ -97,6 +104,7 @@ private:
     QImage m_originalGridImage;
     QImage m_modifiedGridImage;
     QVector<QVector<int>> m_appliedSeedChannels;
+    QVector<QVector<bool>> m_obstacleCellsMask;
 
     bool m_showEffect = true;
     bool m_showGridLines = true;
