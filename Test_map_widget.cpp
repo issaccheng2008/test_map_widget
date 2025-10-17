@@ -112,15 +112,12 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     m_obstacleEditingOverlay = new GraphicsOverlay(this);
     m_mapView->graphicsOverlays()->append(m_obstacleEditingOverlay);
 
-    ui->finishObstacleButton->setEnabled(false);
-
     connect(ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
     connect(ui->importImageButton, &QPushButton::clicked, this, &Test_map_widget::importImage);
     connect(ui->removeImageButton, &QPushButton::clicked, this, &Test_map_widget::clearImportedImage);
     connect(ui->setPositionButton, &QPushButton::clicked, this, &Test_map_widget::setImagePosition);
     connect(ui->openGridButton, &QPushButton::clicked, this, &Test_map_widget::openGridPreview);
-    connect(ui->addObstacleButton, &QPushButton::clicked, this, &Test_map_widget::startObstacleCapture);
-    connect(ui->finishObstacleButton, &QPushButton::clicked, this, &Test_map_widget::finishObstacleCapture);
+    connect(ui->addObstacleButton, &QPushButton::clicked, this, &Test_map_widget::handleObstacleActionButton);
     connect(ui->cancelObstacleButton, &QPushButton::clicked, this, &Test_map_widget::cancelObstacleCapture);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
@@ -741,6 +738,14 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
     setPlacementInfoText(widthText, heightText, widthGridText, heightGridText);
 }
 
+void Test_map_widget::handleObstacleActionButton()
+{
+    if (m_isCapturingObstacle)
+        finishObstacleCapture();
+    else
+        startObstacleCapture();
+}
+
 void Test_map_widget::startObstacleCapture()
 {
     resetObstacleCreationState(true);
@@ -864,9 +869,15 @@ void Test_map_widget::updateObstacleControls()
     if (!ui)
         return;
 
-    if (ui->finishObstacleButton) {
-        const bool canFinish = m_isCapturingObstacle && m_currentObstaclePoints.size() >= 3;
-        ui->finishObstacleButton->setEnabled(canFinish);
+    if (ui->addObstacleButton) {
+        if (m_isCapturingObstacle) {
+            const bool canFinish = m_currentObstaclePoints.size() >= 3;
+            ui->addObstacleButton->setText(tr("Finish"));
+            ui->addObstacleButton->setEnabled(canFinish);
+        } else {
+            ui->addObstacleButton->setText(tr("Add Obstacle"));
+            ui->addObstacleButton->setEnabled(true);
+        }
     }
 
     if (ui->cancelObstacleButton) {
