@@ -45,16 +45,15 @@
 
 namespace
 {
-constexpr double kGridSpacingMeters = 0.3;
 constexpr int kChannelCount = 5;
 
 QCursor createDropperCursor()
 {
-    QPixmap resourcePixmap(QStringLiteral(":/color-picker-dropper-colour-svgrepo-com.png"));
+    QPixmap resourcePixmap(QStringLiteral(":/new_color_picker_icon.png"));
     if (!resourcePixmap.isNull()) {
         const QSize desiredSize(32, 32);
         resourcePixmap = resourcePixmap.scaled(desiredSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        const QPoint hotSpot(resourcePixmap.width() - 4, resourcePixmap.height() - 4);
+        const QPoint hotSpot(0, resourcePixmap.height() - 1);
         return QCursor(resourcePixmap, hotSpot.x(), hotSpot.y());
     }
 
@@ -89,7 +88,7 @@ QCursor createDropperCursor()
 
     painter.end();
 
-    return QCursor(pixmap, 6, 20);
+    return QCursor(pixmap, 0, pixmap.height() - 1);
 }
 } // namespace
 
