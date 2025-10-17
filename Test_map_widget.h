@@ -99,6 +99,7 @@ private:
 
     Ui::Test_map_widget *ui = nullptr;
     int m_initialSideScrollWidth = -1;
+    bool m_isAdjustingSideScrollGeometry = false;
 };
 
 #endif // TEST_MAP_WIDGET_H

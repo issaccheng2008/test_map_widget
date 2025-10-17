@@ -34,6 +34,7 @@
 #include <QMargins>
 #include <QMouseEvent>
 #include <QScrollBar>
+#include <QScopedValueRollback>
 #include <QWidget>
 
 // Standard library
@@ -140,7 +141,15 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
 
 Test_map_widget::~Test_map_widget()
 {
-    delete ui;
+    if (ui) {
+        if (ui->sideScrollArea) {
+            if (QWidget *sidePanel = ui->sideScrollArea->widget())
+                sidePanel->removeEventFilter(this);
+        }
+
+        delete ui;
+        ui = nullptr;
+    }
 }
 
 void Test_map_widget::goToCoordinates()
@@ -323,15 +332,20 @@ void Test_map_widget::adjustSideScrollAreaGeometry()
     if (!ui || !ui->sideScrollArea)
         return;
 
+    QWidget *sidePanel = ui->sideScrollArea->widget();
+    if (!sidePanel)
+        return;
+
+    if (m_isAdjustingSideScrollGeometry)
+        return;
+
+    QScopedValueRollback<bool> guard(m_isAdjustingSideScrollGeometry, true);
+
     if (m_initialSideScrollWidth < 0) {
         m_initialSideScrollWidth = ui->sideScrollArea->sizeHint().width();
         if (m_initialSideScrollWidth <= 0)
             m_initialSideScrollWidth = ui->sideScrollArea->size().width();
     }
-
-    QWidget *sidePanel = ui->sideScrollArea->widget();
-    if (!sidePanel)
-        return;
 
     sidePanel->updateGeometry();
     sidePanel->adjustSize();
