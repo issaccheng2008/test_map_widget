@@ -741,6 +741,7 @@ void GridPreviewWindow::resetState()
     m_showEffect = true;
     m_showGridLines = true;
     m_highlightEmptyCells = false;
+    m_hasGeneratedEffect = false;
 
     m_cellWidthPx = 0;
     m_cellHeightPx = 0;
@@ -790,6 +791,7 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     m_showEffect = true;
     m_showGridLines = true;
     m_highlightEmptyCells = false;
+    m_hasGeneratedEffect = false;
     m_cellWidthPx = 0;
     m_cellHeightPx = 0;
 
@@ -1191,8 +1193,10 @@ void GridPreviewWindow::updateButtonStates()
         m_toggleGridLinesButton->setText(m_showGridLines ? tr("Hide grid lines") : tr("Show grid lines"));
     }
 
-    if (m_commitButton)
-        m_commitButton->setEnabled(effectPossible);
+    if (m_commitButton) {
+        const bool commitEnabled = effectPossible && m_showEffect && m_hasGeneratedEffect;
+        m_commitButton->setEnabled(commitEnabled);
+    }
 
     if (m_addSeedButton)
         m_addSeedButton->setEnabled(true);
@@ -1204,6 +1208,11 @@ void GridPreviewWindow::updateButtonStates()
 
     if (m_applyChangesButton)
         m_applyChangesButton->setEnabled(allSeedInputsValid());
+}
+
+void GridPreviewWindow::invalidateGeneratedEffect()
+{
+    m_hasGeneratedEffect = false;
 }
 
 void GridPreviewWindow::updateSeedItemNumbers()
@@ -1286,16 +1295,19 @@ void GridPreviewWindow::connectSeedWidgetSignals(QWidget *widget)
 
     if (auto *edit = seedWidget->seedColorLineEdit())
         connect(edit, &QLineEdit::textChanged, this, [this]() {
+            invalidateGeneratedEffect();
             updateButtonStates();
         });
 
     if (auto *edit = seedWidget->targetColorLineEdit())
         connect(edit, &QLineEdit::textChanged, this, [this]() {
+            invalidateGeneratedEffect();
             updateButtonStates();
         });
 
     if (auto *edit = seedWidget->targetWeightLineEdit())
         connect(edit, &QLineEdit::textChanged, this, [this]() {
+            invalidateGeneratedEffect();
             updateButtonStates();
         });
 
@@ -1303,6 +1315,7 @@ void GridPreviewWindow::connectSeedWidgetSignals(QWidget *widget)
         connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this, seedWidget](int) {
             if (m_activeColorPreview == seedWidget->seedColorPreviewLabel())
                 stopColorPicking();
+            invalidateGeneratedEffect();
             updateButtonStates();
         });
 
@@ -1490,6 +1503,7 @@ void GridPreviewWindow::handleAddSeedClicked()
 
     connectSeedWidgetSignals(widget);
 
+    invalidateGeneratedEffect();
     updateButtonStates();
 }
 
@@ -1505,6 +1519,7 @@ void GridPreviewWindow::handleDeleteSeedClicked()
     QListWidgetItem *item = m_seedListWidget->takeItem(currentRow);
     delete item;
 
+    invalidateGeneratedEffect();
     updateSeedItemNumbers();
 }
 
@@ -1610,6 +1625,7 @@ void GridPreviewWindow::handleApplyChangesClicked()
         return;
     }
 
+    m_hasGeneratedEffect = true;
     m_showEffect = true;
     updateDisplayedPixmap();
 }

@@ -52,6 +52,7 @@ private:
     bool ensureOriginalGridImage();
     bool rebuildEffectPixmapsFromModifiedGrid();
     void updateButtonStates();
+    void invalidateGeneratedEffect();
     void updateSeedItemNumbers();
     bool allSeedInputsValid() const;
     bool collectSeedDefinitions(QVector<SeedDefinition> &outSeeds) const;
@@ -111,6 +112,7 @@ private:
     bool m_showEffect = true;
     bool m_showGridLines = true;
     bool m_highlightEmptyCells = false;
+    bool m_hasGeneratedEffect = false;
 
     int m_cellWidthPx = 0;
     int m_cellHeightPx = 0;

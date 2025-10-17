@@ -73,6 +73,7 @@ private:
     void addObstaclePoint(const QPoint &screenPoint);
     void rebuildObstaclePreview();
     void resetObstacleCreationState(bool keepActive);
+    void updateObstacleControls();
     void updatePinnedImagePosition();
     void updateUiState();
     std::optional<QList<Esri::ArcGISRuntime::Point>> mapPointsForCurrentImageViewport() const;
