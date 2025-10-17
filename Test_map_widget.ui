@@ -100,16 +100,96 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="setPositionButton">
-            <property name="text">
-             <string>Set Position</string>
+          <widget class="QPushButton" name="setPositionButton">
+           <property name="text">
+            <string>Set Position</string>
+           </property>
+           <property name="toolTip">
+            <string>Replace the image with a map footprint</string>
+           </property>
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+          <item>
+           <widget class="QGroupBox" name="imagePlacementInfoGroup">
+            <property name="title">
+             <string>Placement info</string>
             </property>
-            <property name="toolTip">
-             <string>Replace the image with a map footprint</string>
-            </property>
-            <property name="enabled">
+            <property name="visible">
              <bool>false</bool>
             </property>
+            <layout class="QFormLayout" name="imagePlacementInfoLayout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="imageWidthLabel">
+               <property name="text">
+                <string>Width</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLabel" name="imageWidthValue">
+               <property name="text">
+                <string>---</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="imageHeightLabel">
+               <property name="text">
+                <string>Height</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLabel" name="imageHeightValue">
+               <property name="text">
+                <string>---</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="imageWidthGridLabel">
+               <property name="text">
+                <string>Width grid #</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLabel" name="imageWidthGridValue">
+               <property name="text">
+                <string>---</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="imageHeightGridLabel">
+               <property name="text">
+                <string>Height grid #</string>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QLabel" name="imageHeightGridValue">
+               <property name="text">
+                <string>---</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
           <item>
