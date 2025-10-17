@@ -550,6 +550,7 @@ void Test_map_widget::updateUiState()
         ui->openGridButton->setEnabled(hasPinnedImage);
 
     updatePlacementInfoPanel(hasImage, hasPinnedImage);
+    updateObstacleControls();
 }
 
 std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() const
@@ -698,6 +699,14 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
     QString widthGridText = QStringLiteral("---");
     QString heightGridText = QStringLiteral("---");
 
+    const auto areaOptional = currentImageAreaSquareMeters();
+    constexpr double kMaxAreaSquareMeters = 10000.0;
+    if (areaOptional && *areaOptional >= kMaxAreaSquareMeters) {
+        const QString invalidText = QStringLiteral("--");
+        setPlacementInfoText(invalidText, invalidText, invalidText, invalidText);
+        return;
+    }
+
     if (dimensionsOptional) {
         const double widthMeters = dimensionsOptional->first;
         const double heightMeters = dimensionsOptional->second;
@@ -737,6 +746,8 @@ void Test_map_widget::startObstacleCapture()
     resetObstacleCreationState(true);
     m_isCapturingObstacle = true;
 
+    updateObstacleControls();
+
     if (statusBar())
         statusBar()->showMessage(tr("Right-click on the map to add obstacle vertices."), 5000);
 }
@@ -760,6 +771,7 @@ void Test_map_widget::finishObstacleCapture()
     m_obstacleOverlay->graphics()->append(polygonGraphic);
 
     resetObstacleCreationState(false);
+    updateObstacleControls();
 
     if (statusBar())
         statusBar()->showMessage(tr("Obstacle saved."), 5000);
@@ -767,13 +779,32 @@ void Test_map_widget::finishObstacleCapture()
 
 void Test_map_widget::cancelObstacleCapture()
 {
-    if (!m_isCapturingObstacle && m_currentObstaclePoints.isEmpty())
+    if (m_isCapturingObstacle) {
+        resetObstacleCreationState(false);
+        updateObstacleControls();
+
+        if (statusBar())
+            statusBar()->showMessage(tr("Obstacle creation canceled."), 5000);
+        return;
+    }
+
+    if (obstaclesList.isEmpty())
         return;
 
-    resetObstacleCreationState(false);
+    obstaclesList.removeLast();
+
+    if (m_obstacleOverlay) {
+        if (auto *graphicsModel = m_obstacleOverlay->graphics()) {
+            const int lastIndex = graphicsModel->rowCount() - 1;
+            if (lastIndex >= 0)
+                graphicsModel->removeAt(lastIndex);
+        }
+    }
+
+    updateObstacleControls();
 
     if (statusBar())
-        statusBar()->showMessage(tr("Obstacle creation canceled."), 5000);
+        statusBar()->showMessage(tr("Last obstacle deleted."), 5000);
 }
 
 void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
@@ -786,8 +817,7 @@ void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
 
     rebuildObstaclePreview();
 
-    if (ui && ui->finishObstacleButton)
-        ui->finishObstacleButton->setEnabled(m_currentObstaclePoints.size() >= 3);
+    updateObstacleControls();
 }
 
 void Test_map_widget::rebuildObstaclePreview()
@@ -826,6 +856,26 @@ void Test_map_widget::resetObstacleCreationState(bool keepActive)
     if (m_obstacleEditingOverlay)
         m_obstacleEditingOverlay->graphics()->clear();
 
-    if (ui && ui->finishObstacleButton)
-        ui->finishObstacleButton->setEnabled(false);
+    updateObstacleControls();
+}
+
+void Test_map_widget::updateObstacleControls()
+{
+    if (!ui)
+        return;
+
+    if (ui->finishObstacleButton) {
+        const bool canFinish = m_isCapturingObstacle && m_currentObstaclePoints.size() >= 3;
+        ui->finishObstacleButton->setEnabled(canFinish);
+    }
+
+    if (ui->cancelObstacleButton) {
+        if (m_isCapturingObstacle) {
+            ui->cancelObstacleButton->setText(tr("Cancel"));
+            ui->cancelObstacleButton->setEnabled(true);
+        } else {
+            ui->cancelObstacleButton->setText(tr("Delete"));
+            ui->cancelObstacleButton->setEnabled(!obstaclesList.isEmpty());
+        }
+    }
 }
