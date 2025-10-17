@@ -637,8 +637,11 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
     const bool showPanel = hasImage && !hasPinnedImage;
     ui->imagePlacementInfoGroup->setVisible(showPanel);
 
-    if (showPanel)
-        ui->imagePlacementInfoGroup->updateGeometry();
+    if (showPanel) {
+        if (auto *layout = ui->imagePlacementInfoGroup->layout())
+            layout->activate();
+        ui->imagePlacementInfoGroup->adjustSize();
+    }
 
     if (!showPanel) {
         resetLabels();
