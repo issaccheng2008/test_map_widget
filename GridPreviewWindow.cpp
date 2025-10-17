@@ -1025,10 +1025,10 @@ void GridPreviewWindow::applyObstacleTransparencyToImage(QImage &image) const
     if (image.width() != m_gridColumns || image.height() != m_gridRows)
         return;
 
-    const int rowCount = std::min(m_gridRows, m_obstacleCellsMask.size());
+    const int rowCount = std::min(m_gridRows, (int)m_obstacleCellsMask.size());
     for (int row = 0; row < rowCount; ++row) {
         const QVector<bool> &maskRow = m_obstacleCellsMask.at(row);
-        const int columnCount = std::min(m_gridColumns, maskRow.size());
+        const int columnCount = std::min(m_gridColumns, (int)maskRow.size());
         for (int column = 0; column < columnCount; ++column) {
             if (maskRow.at(column))
                 image.setPixelColor(column, row, QColor(0, 0, 0, 0));
