@@ -913,7 +913,17 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
 
     const QColor fillColor(144, 238, 144, 96);
     const QColor edgeColor(34, 139, 34, 255);
-    const QColor gridColor(34, 139, 34, 180);
+
+    const auto isEmptyCell = [&](int rowIndex, int columnIndex) -> bool {
+        if (rowIndex < 0 || rowIndex >= m_appliedSeedChannels.size())
+            return false;
+
+        const QVector<int> &rowValues = m_appliedSeedChannels.at(rowIndex);
+        if (columnIndex < 0 || columnIndex >= rowValues.size())
+            return false;
+
+        return rowValues.at(columnIndex) == 0;
+    };
 
     for (int row = 0; row < m_appliedSeedChannels.size(); ++row) {
         if (row < 0 || row >= m_gridRows)
@@ -925,25 +935,27 @@ void GridPreviewWindow::applyEmptyChannelHighlight(QImage &image) const
                 continue;
 
             const QRect cellRect(column * m_cellWidthPx, row * m_cellHeightPx, m_cellWidthPx, m_cellHeightPx);
+            painter.setPen(Qt::NoPen);
             painter.fillRect(cellRect, fillColor);
 
             QPen borderPen(edgeColor);
-            borderPen.setWidth(2);
-            borderPen.setJoinStyle(Qt::MiterJoin);
+            borderPen.setWidthF(1.0);
+            borderPen.setCapStyle(Qt::SquareCap);
             painter.setPen(borderPen);
-            painter.drawRect(cellRect.adjusted(0, 0, -1, -1));
 
-            QPen gridPen(gridColor);
-            gridPen.setWidth(1);
-            gridPen.setCapStyle(Qt::SquareCap);
-            gridPen.setJoinStyle(Qt::MiterJoin);
-            painter.setPen(gridPen);
+            const int left = cellRect.left();
+            const int right = cellRect.right() - 1;
+            const int top = cellRect.top();
+            const int bottom = cellRect.bottom() - 1;
 
-            const int step = std::max(4, std::min(m_cellWidthPx, m_cellHeightPx) / 4);
-            for (int x = cellRect.left() + step; x < cellRect.right(); x += step)
-                painter.drawLine(QPoint(x, cellRect.top()), QPoint(x, cellRect.bottom() - 1));
-            for (int y = cellRect.top() + step; y < cellRect.bottom(); y += step)
-                painter.drawLine(QPoint(cellRect.left(), y), QPoint(cellRect.right() - 1, y));
+            if (!isEmptyCell(row, column - 1))
+                painter.drawLine(QPoint(left, top), QPoint(left, bottom));
+            if (!isEmptyCell(row, column + 1))
+                painter.drawLine(QPoint(right, top), QPoint(right, bottom));
+            if (!isEmptyCell(row - 1, column))
+                painter.drawLine(QPoint(left, top), QPoint(right, top));
+            if (!isEmptyCell(row + 1, column))
+                painter.drawLine(QPoint(left, bottom), QPoint(right, bottom));
         }
     }
 }
