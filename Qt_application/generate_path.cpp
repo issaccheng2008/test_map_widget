@@ -41,9 +41,12 @@ const double max_image_area = 10000.0;
 const int channel_number = 5;
 
 void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
-                   const QVector<QVector<int>> &channelGrid)
+                   const QVector<QVector<int>> &channelGrid,
+                   const Esri::ArcGISRuntime::Point &currentGpsPoint)
 {
     qDebug() << "generate_path called";
+    if (!currentGpsPoint.isEmpty())
+        qDebug() << "Current GPS location:" << currentGpsPoint.y() << currentGpsPoint.x();
 
     const int totalRows = channelGrid.size();
     int totalColumns = 0;

@@ -203,6 +203,8 @@ void Test_map_widget::updateGpsCoordinate(double latitude, double longitude)
     }
 
     const Point location(longitude, latitude, SpatialReference::wgs84());
+    m_latestGpsPoint = location;
+    m_hasLatestGpsPoint = true;
 
     if (m_locationOverlay) {
         if (!m_currentLocationGraphic) {
@@ -1082,7 +1084,13 @@ void Test_map_widget::generatePathForCurrentImage()
     for (const obstacles &obstacle : obstaclesList)
         obstaclePolygons.append(obstacle.vertices);
 
-    generate_path(*workAreaPoints, g_channelGrid);
+    if (!m_hasLatestGpsPoint || m_latestGpsPoint.isEmpty()) {
+        if (statusBar())
+            statusBar()->showMessage(tr("Awaiting GPS coordinates."), 5000);
+        return;
+    }
+
+    generate_path(*workAreaPoints, g_channelGrid, m_latestGpsPoint);
 
     if (statusBar())
         statusBar()->showMessage(tr("Path generation requested."), 5000);

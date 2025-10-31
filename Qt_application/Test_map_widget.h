@@ -120,6 +120,8 @@ private:
     bool m_workAreaVisible = false;
     QPointer<Esri::ArcGISRuntime::Graphic> m_currentLocationGraphic;
     bool m_hasCenteredOnGps = false;
+    Esri::ArcGISRuntime::Point m_latestGpsPoint;
+    bool m_hasLatestGpsPoint = false;
     GpsNetworkClient *m_gpsClient = nullptr;
 
     Ui::Test_map_widget *ui = nullptr;
