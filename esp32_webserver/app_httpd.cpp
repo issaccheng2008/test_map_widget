@@ -25,6 +25,9 @@
 #include "esp32-hal-log.h"
 #endif
 
+extern double g_simulatedLatitude;
+extern double g_simulatedLongitude;
+
 // LED FLASH setup
 #if defined(LED_GPIO_NUM)
 #define CONFIG_LED_MAX_INTENSITY 255
@@ -649,6 +652,19 @@ static esp_err_t win_handler(httpd_req_t *req) {
   return httpd_resp_send(req, NULL, 0);
 }
 
+static esp_err_t gps_handler(httpd_req_t *req) {
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  char payload[96];
+  const int len = snprintf(payload, sizeof(payload), "{\"latitude\":%.6f,\"longitude\":%.6f}", g_simulatedLatitude, g_simulatedLongitude);
+  if (len < 0) {
+    return httpd_resp_send_500(req);
+  }
+
+  return httpd_resp_send(req, payload, len);
+}
+
 static esp_err_t index_handler(httpd_req_t *req) {
   httpd_resp_set_type(req, "text/html");
   httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
@@ -669,7 +685,7 @@ static esp_err_t index_handler(httpd_req_t *req) {
 
 void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.max_uri_handlers = 16;
+  config.max_uri_handlers = 17;
 
   httpd_uri_t index_uri = {
     .uri = "/",
@@ -814,6 +830,19 @@ void startCameraServer() {
 #endif
   };
 
+  httpd_uri_t gps_uri = {
+    .uri = "/gps",
+    .method = HTTP_GET,
+    .handler = gps_handler,
+    .user_ctx = NULL
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+    ,
+    .is_websocket = true,
+    .handle_ws_control_frames = false,
+    .supported_subprotocol = NULL
+#endif
+  };
+
   ra_filter_init(&ra_filter, 20);
 
   log_i("Starting web server on port: '%d'", config.server_port);
@@ -829,6 +858,7 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &greg_uri);
     httpd_register_uri_handler(camera_httpd, &pll_uri);
     httpd_register_uri_handler(camera_httpd, &win_uri);
+    httpd_register_uri_handler(camera_httpd, &gps_uri);
   }
 
   config.server_port += 1;
