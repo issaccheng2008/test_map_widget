@@ -50,7 +50,8 @@ HEADERS += \
     OverlayImageWidget.h \
     GridPreviewWindow.h \
     GridState.h \
-    generate_path.h
+    generate_path.h \
+    ImageScalingConstants.h
 
 FORMS += \
     Test_map_widget.ui

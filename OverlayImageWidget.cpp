@@ -1,9 +1,12 @@
 #include "OverlayImageWidget.h"
 
+#include "ImageScalingConstants.h"
+
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
 #include <QGraphicsSceneHoverEvent>
 #include <QGraphicsSceneMouseEvent>
+#include <QImage>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
@@ -28,7 +31,6 @@ constexpr qreal kHandleOffset = 30.0;
 constexpr qreal kHandleRadius = 14.0;
 constexpr qreal kHandleHoverRadius = 18.0;
 constexpr qreal kViewportMatchTolerance = 0.5;
-constexpr int kBaseImageDimension = 484;
 }
 
 class RotationHandle : public QGraphicsItem
@@ -138,16 +140,37 @@ OverlayImageWidget::OverlayImageWidget(QWidget *parent)
 
 bool OverlayImageWidget::loadImage(const QString &filePath)
 {
-    QPixmap pixmap(filePath);
-    if (pixmap.isNull())
+    QImage image(filePath);
+    if (image.isNull())
         return false;
 
-    pixmap = pixmap.scaled(QSize(kBaseImageDimension, kBaseImageDimension), Qt::KeepAspectRatio,
-                           Qt::SmoothTransformation);
+    const QSize originalSize = image.size();
+    const int longestDimension = std::max(originalSize.width(), originalSize.height());
+    if (longestDimension <= 0)
+        return false;
+
+    const int targetLongest = ImageScalingConstants::kFullResolutionTargetDimension;
+    if (longestDimension < targetLongest) {
+        image = image.scaled(QSize(targetLongest, targetLongest), Qt::KeepAspectRatio,
+                             Qt::SmoothTransformation);
+    }
+
+    QPixmap fullResolutionPixmap = QPixmap::fromImage(image);
+    if (fullResolutionPixmap.isNull())
+        return false;
 
     clearImage();
 
-    m_pixmapItem = m_scene->addPixmap(pixmap);
+    m_fullResolutionPixmap = fullResolutionPixmap;
+
+    const QSize displayTarget(ImageScalingConstants::kDisplayBaseDimension,
+                              ImageScalingConstants::kDisplayBaseDimension);
+    QPixmap displayPixmap = m_fullResolutionPixmap.scaled(displayTarget, Qt::KeepAspectRatio,
+                                                          Qt::SmoothTransformation);
+    if (displayPixmap.isNull())
+        displayPixmap = m_fullResolutionPixmap;
+
+    m_pixmapItem = m_scene->addPixmap(displayPixmap);
     m_pixmapItem->setTransformationMode(Qt::SmoothTransformation);
     m_pixmapItem->setTransformOriginPoint(m_pixmapItem->boundingRect().center());
     m_pixmapItem->setAcceptedMouseButtons(Qt::NoButton);
@@ -188,6 +211,7 @@ void OverlayImageWidget::clearImage()
         delete m_pixmapItem;
         m_pixmapItem = nullptr;
     }
+    m_fullResolutionPixmap = QPixmap();
     m_isPinned = false;
     m_currentScale = 1.0;
     m_currentRotation = 0.0;
@@ -220,10 +244,10 @@ QPolygonF OverlayImageWidget::currentImageViewportPolygon() const
 
 QPixmap OverlayImageWidget::currentPixmap() const
 {
-    if (!m_pixmapItem)
+    if (m_fullResolutionPixmap.isNull())
         return {};
 
-    return m_pixmapItem->pixmap();
+    return m_fullResolutionPixmap;
 }
 
 void OverlayImageWidget::setCurrentPixmap(const QPixmap &pixmap)
@@ -231,7 +255,16 @@ void OverlayImageWidget::setCurrentPixmap(const QPixmap &pixmap)
     if (!m_pixmapItem || pixmap.isNull())
         return;
 
-    m_pixmapItem->setPixmap(pixmap);
+    m_fullResolutionPixmap = pixmap;
+
+    const QSize displayTarget(ImageScalingConstants::kDisplayBaseDimension,
+                              ImageScalingConstants::kDisplayBaseDimension);
+    QPixmap displayPixmap = m_fullResolutionPixmap.scaled(displayTarget, Qt::KeepAspectRatio,
+                                                          Qt::SmoothTransformation);
+    if (displayPixmap.isNull())
+        displayPixmap = m_fullResolutionPixmap;
+
+    m_pixmapItem->setPixmap(displayPixmap);
     m_pixmapItem->setTransformOriginPoint(m_pixmapItem->boundingRect().center());
 
     if (m_rotationHandle) {

@@ -60,6 +60,8 @@ private:
     bool m_isPinned = false;
     qreal m_savedScaleBeforePin = 1.0;
     qreal m_savedRotationBeforePin = 0.0;
+
+    QPixmap m_fullResolutionPixmap;
 };
 
 #endif // OVERLAYIMAGEWIDGET_H
