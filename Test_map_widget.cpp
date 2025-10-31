@@ -353,7 +353,7 @@ bool Test_map_widget::ensureWorkAreaGraphic()
     auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
 
     m_workAreaGraphic = new Graphic(geometry, fillSymbol, this);
-    graphicsModel->append(m_workAreaGraphic);
+    graphicsModel->append(m_workAreaGraphic.data());
 
     m_cachedWorkArea = polygonPoints;
     return true;

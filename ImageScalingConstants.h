@@ -3,7 +3,7 @@
 
 namespace ImageScalingConstants
 {
-inline constexpr int kFullResolutionTargetDimension = 8640;
+inline constexpr int kFullResolutionTargetDimension = 2000;
 inline constexpr int kDisplayBaseDimension = 484;
 }
 

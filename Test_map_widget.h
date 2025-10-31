@@ -18,6 +18,7 @@ class Map;
 class MapGraphicsView;
 class GraphicsOverlay;
 class Point;
+class Graphic;
 } // namespace Esri::ArcGISRuntime
 
 #include <QMainWindow>
