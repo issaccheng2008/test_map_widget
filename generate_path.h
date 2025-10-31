@@ -13,7 +13,6 @@ extern const double max_image_area;
 extern const int channel_number;
 
 void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
-                   const QList<QList<Esri::ArcGISRuntime::Point>> &obstacles,
                    const QVector<QVector<int>> &channelGrid);
 
 Esri::ArcGISRuntime::Point gridCellGpsCoordinate(int row,

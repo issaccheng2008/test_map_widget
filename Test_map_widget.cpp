@@ -1032,7 +1032,7 @@ void Test_map_widget::generatePathForCurrentImage()
     for (const obstacles &obstacle : obstaclesList)
         obstaclePolygons.append(obstacle.vertices);
 
-    generate_path(*workAreaPoints, obstaclePolygons, g_channelGrid);
+    generate_path(*workAreaPoints, g_channelGrid);
 
     if (statusBar())
         statusBar()->showMessage(tr("Path generation requested."), 5000);
