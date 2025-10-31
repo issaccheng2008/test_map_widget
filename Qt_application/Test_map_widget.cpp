@@ -17,6 +17,7 @@
 #include "GridPreviewWindow.h"
 #include "GridState.h"
 #include "generate_path.h"
+#include "network.h"
 
 // Qt headers
 #include <QAbstractScrollArea>
@@ -31,10 +32,12 @@
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QStringList>
+#include <QSignalBlocker>
 #include <QEvent>
 #include <QMouseEvent>
 #include <QWidget>
 #include <QVector2D>
+#include <QUrl>
 
 // Standard library
 #include <algorithm>
@@ -117,6 +120,9 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     m_obstacleEditingOverlay = new GraphicsOverlay(this);
     m_mapView->graphicsOverlays()->append(m_obstacleEditingOverlay);
 
+    m_locationOverlay = new GraphicsOverlay(this);
+    m_mapView->graphicsOverlays()->append(m_locationOverlay);
+
     connect(ui->goToCoordinateButton, &QPushButton::clicked, this, &Test_map_widget::goToCoordinates);
     connect(ui->importImageButton, &QPushButton::clicked, this, &Test_map_widget::importImage);
     connect(ui->removeImageButton, &QPushButton::clicked, this, &Test_map_widget::clearImportedImage);
@@ -128,6 +134,11 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     connect(ui->generatePathButton, &QPushButton::clicked, this, &Test_map_widget::generatePathForCurrentImage);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
+
+    m_gpsClient = new GpsNetworkClient(QUrl(QStringLiteral("http://192.168.43.95/gps")), this);
+    connect(m_gpsClient, &GpsNetworkClient::coordinateReceived, this, &Test_map_widget::updateGpsCoordinate);
+    connect(m_gpsClient, &GpsNetworkClient::networkError, this, &Test_map_widget::handleGpsError);
+    m_gpsClient->start(2000);
 
     updateUiState();
 }
@@ -177,6 +188,45 @@ void Test_map_widget::goToCoordinates()
 
     // drawLineBetweenCoordinates(location,endlocation);
 
+}
+
+void Test_map_widget::updateGpsCoordinate(double latitude, double longitude)
+{
+    if (!ui || !ui->coordinateInput)
+        return;
+
+    const QLocale numberLocale = QLocale::c();
+    const QString coordinateText = numberLocale.toString(latitude, 'f', 6) + QStringLiteral(", ") + numberLocale.toString(longitude, 'f', 6);
+    {
+        QSignalBlocker blocker(ui->coordinateInput);
+        ui->coordinateInput->setText(coordinateText);
+    }
+
+    const Point location(longitude, latitude, SpatialReference::wgs84());
+
+    if (m_locationOverlay) {
+        if (!m_currentLocationGraphic) {
+            const QColor markerColor(255, 69, 0); // Orange-red for visibility
+            auto *symbol = new SimpleMarkerSymbol(SimpleMarkerSymbolStyle::Circle, markerColor, 12.0f, this);
+            m_currentLocationGraphic = new Graphic(location, symbol, this);
+            if (auto *graphics = m_locationOverlay->graphics())
+                graphics->append(m_currentLocationGraphic);
+        } else {
+            m_currentLocationGraphic->setGeometry(location);
+        }
+    }
+
+    if (!m_hasCenteredOnGps && m_mapView) {
+        constexpr double zoomScale = 5000.0;
+        m_mapView->setViewpointCenterAsync(location, zoomScale);
+        m_hasCenteredOnGps = true;
+    }
+}
+
+void Test_map_widget::handleGpsError(const QString &message)
+{
+    if (QStatusBar *bar = statusBar())
+        bar->showMessage(message, 3000);
 }
 
 void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point &end)

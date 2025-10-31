@@ -27,6 +27,7 @@ class Graphic;
 #include <QPixmap>
 #include <QPointer>
 #include <QVector>
+#include <QString>
 
 #include <QtGlobal>
 #include <optional>
@@ -34,6 +35,7 @@ class Graphic;
 
 class OverlayImageWidget;
 class GridPreviewWindow;
+class GpsNetworkClient;
 
 namespace Ui {
 class Test_map_widget;
@@ -70,6 +72,8 @@ private slots:
     void cancelObstacleCapture();
     void toggleWorkArea();
     void generatePathForCurrentImage();
+    void updateGpsCoordinate(double latitude, double longitude);
+    void handleGpsError(const QString &message);
 
 private:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -98,6 +102,7 @@ private:
     Esri::ArcGISRuntime::GraphicsOverlay *m_workAreaOverlay = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_obstacleOverlay = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_obstacleEditingOverlay = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_locationOverlay = nullptr;
     OverlayImageWidget *m_imageOverlay = nullptr;
 
     QList<Esri::ArcGISRuntime::Point> m_currentObstaclePoints;
@@ -113,6 +118,9 @@ private:
     QPointer<Esri::ArcGISRuntime::Graphic> m_workAreaGraphic;
     QList<Esri::ArcGISRuntime::Point> m_cachedWorkArea;
     bool m_workAreaVisible = false;
+    QPointer<Esri::ArcGISRuntime::Graphic> m_currentLocationGraphic;
+    bool m_hasCenteredOnGps = false;
+    GpsNetworkClient *m_gpsClient = nullptr;
 
     Ui::Test_map_widget *ui = nullptr;
 };

@@ -15,6 +15,36 @@ const char *password = "1234dcba";
 void startCameraServer();
 void setupLedFlash();
 
+double g_simulatedLatitude = 37.7749;
+double g_simulatedLongitude = -122.4194;
+double g_latitudeStep = 0.00015;
+double g_longitudeStep = 0.00022;
+unsigned long g_lastGpsUpdateMs = 0;
+
+static void updateSimulatedGps()
+{
+  const unsigned long now = millis();
+  if (now - g_lastGpsUpdateMs < 1000) {
+    return;
+  }
+
+  g_lastGpsUpdateMs = now;
+
+  g_simulatedLatitude += g_latitudeStep;
+  g_simulatedLongitude += g_longitudeStep;
+
+  if (g_simulatedLatitude > 89.9 || g_simulatedLatitude < -89.9) {
+    g_latitudeStep = -g_latitudeStep;
+    g_simulatedLatitude = constrain(g_simulatedLatitude, -89.9, 89.9);
+  }
+
+  if (g_simulatedLongitude > 180.0) {
+    g_simulatedLongitude -= 360.0;
+  } else if (g_simulatedLongitude < -180.0) {
+    g_simulatedLongitude += 360.0;
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
@@ -125,6 +155,6 @@ void setup() {
 }
 
 void loop() {
-  // Do nothing. Everything is done in another task by the web server
-  delay(10000);
+  updateSimulatedGps();
+  delay(100);
 }
