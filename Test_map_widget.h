@@ -18,11 +18,15 @@ class Map;
 class MapGraphicsView;
 class GraphicsOverlay;
 class Point;
+class Geometry;
 } // namespace Esri::ArcGISRuntime
 
 #include <QMainWindow>
+#include <QList>
+#include <QPolygonF>
 
 class OverlayImageWidget;
+class SeedSelectionWindow;
 
 namespace Ui {
 class Test_map_widget;
@@ -42,14 +46,30 @@ private slots:
     void goToCoordinates();
     void importImage();
     void clearImportedImage();
+    void toggleWorkArea();
+    void openSeedSelectionWindow();
+    void generatePath();
+    void onSeedsChanged();
+    void onOverlayImageLoaded();
+    void onOverlayImageCleared();
 
 private:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void updateImageDependentUi();
+    void updateGeneratePathButtonState();
+    void hideWorkAreaGraphic();
+    QList<Esri::ArcGISRuntime::Point> workAreaCoordinates() const;
+    Esri::ArcGISRuntime::Geometry buildWorkAreaGeometry() const;
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_workAreaOverlay = nullptr;
     OverlayImageWidget *m_imageOverlay = nullptr;
+    Esri::ArcGISRuntime::Graphic *m_workAreaGraphic = nullptr;
+    SeedSelectionWindow *m_seedSelectionWindow = nullptr;
+    QList<Esri::ArcGISRuntime::Geometry> m_obstacles;
+    bool m_isWorkAreaVisible = false;
     Ui::Test_map_widget *ui = nullptr;
 };
 

@@ -41,11 +41,15 @@ win32:CONFIG += \
 SOURCES += \
     main.cpp \
     Test_map_widget.cpp \
-    OverlayImageWidget.cpp
+    OverlayImageWidget.cpp \
+    SeedSelectionWindow.cpp \
+    generate_path.cpp
 
 HEADERS += \
     Test_map_widget.h \
-    OverlayImageWidget.h
+    OverlayImageWidget.h \
+    SeedSelectionWindow.h \
+    generate_path.h
 
 FORMS += \
     Test_map_widget.ui
