@@ -1742,15 +1742,6 @@ void GridPreviewWindow::handleApplyChangesClicked()
     m_modifiedGridImage = newGrid;
     g_channelGrid = channelGrid;
 
-    qDebug().noquote() << "Channel grid:";
-    for (const QVector<int> &row : g_channelGrid) {
-        QStringList values;
-        values.reserve(row.size());
-        for (int value : row)
-            values << QString::number(value);
-        qDebug().noquote() << values.join(QLatin1Char(' '));
-    }
-
     m_appliedSeedChannels = channelGrid;
     m_effectPixmap = {};
     m_effectWithGridPixmap = {};
