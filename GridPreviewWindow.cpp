@@ -1,5 +1,7 @@
 #include "GridPreviewWindow.h"
 
+#include "ImageScalingConstants.h"
+
 #include <QAbstractButton>
 #include <QAbstractItemView>
 #include <QComboBox>
@@ -813,6 +815,7 @@ void GridPreviewWindow::resetState()
     m_cellHeightPx = 0;
     m_gridColumns = 0;
     m_gridRows = 0;
+    m_displayScaleFactor = 1.0;
 
     if (m_seedListWidget)
         m_seedListWidget->clear();
@@ -869,10 +872,13 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     updateChannelAvailability();
 
     if (pixmap.isNull() || widthMeters <= 0.0 || heightMeters <= 0.0) {
+        m_displayScaleFactor = 1.0;
         m_imageLabel->clear();
         updateButtonStates();
         return;
     }
+
+    m_displayScaleFactor = computeDisplayScaleFactor(pixmap.size());
 
     const double horizontalSpacingPx = pixmap.width() * (grid_size / widthMeters);
     const double verticalSpacingPx = pixmap.height() * (grid_size / heightMeters);
@@ -915,7 +921,7 @@ void GridPreviewWindow::updateDisplayedPixmap()
     if (displayPixmap.isNull())
         m_imageLabel->clear();
     else
-        m_imageLabel->setPixmap(displayPixmap);
+        m_imageLabel->setPixmap(scaledForDisplay(displayPixmap));
 
     m_imageLabel->adjustSize();
     updateButtonStates();
@@ -1786,5 +1792,36 @@ void GridPreviewWindow::resizeEvent(QResizeEvent *event)
 {
     QDialog::resizeEvent(event);
     updatePalettePanelGeometry();
+}
+
+QPixmap GridPreviewWindow::scaledForDisplay(const QPixmap &pixmap) const
+{
+    if (pixmap.isNull())
+        return pixmap;
+
+    if (m_displayScaleFactor <= 1.0)
+        return pixmap;
+
+    const int targetWidth = std::max(1, static_cast<int>(std::round(pixmap.width() / m_displayScaleFactor)));
+    const int targetHeight = std::max(1, static_cast<int>(std::round(pixmap.height() / m_displayScaleFactor)));
+    const QSize targetSize(targetWidth, targetHeight);
+
+    return pixmap.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+qreal GridPreviewWindow::computeDisplayScaleFactor(const QSize &size)
+{
+    if (!size.isValid())
+        return 1.0;
+
+    const qreal width = static_cast<qreal>(std::max(1, size.width()));
+    const qreal height = static_cast<qreal>(std::max(1, size.height()));
+    const qreal longest = std::max(width, height);
+    const qreal target = static_cast<qreal>(ImageScalingConstants::kDisplayBaseDimension);
+
+    if (target <= 0.0 || longest <= target)
+        return 1.0;
+
+    return longest / target;
 }
 

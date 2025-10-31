@@ -83,6 +83,9 @@ private:
     void updateColorSelectionUiState();
     void updatePalettePanelGeometry();
 
+    QPixmap scaledForDisplay(const QPixmap &pixmap) const;
+    static qreal computeDisplayScaleFactor(const QSize &size);
+
     void resizeEvent(QResizeEvent *event) override;
 
     QLabel *m_imageLabel = nullptr;
@@ -121,6 +124,8 @@ private:
     int m_cellHeightPx = 0;
     int m_gridColumns = 0;
     int m_gridRows = 0;
+
+    qreal m_displayScaleFactor = 1.0;
 
     std::unique_ptr<ColorPickerOverlay> m_colorPickerOverlay;
     QLineEdit *m_activeColorLineEdit = nullptr;
