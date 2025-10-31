@@ -42,13 +42,15 @@ SOURCES += \
     main.cpp \
     Test_map_widget.cpp \
     OverlayImageWidget.cpp \
-    GridPreviewWindow.cpp
+    GridPreviewWindow.cpp \
+    generate_path.cpp
 
 HEADERS += \
     Test_map_widget.h \
     OverlayImageWidget.h \
     GridPreviewWindow.h \
-    GridState.h
+    GridState.h \
+    generate_path.h
 
 FORMS += \
     Test_map_widget.ui

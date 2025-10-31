@@ -28,10 +28,13 @@
 #include <QResizeEvent>
 #include <QMargins>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QStandardItemModel>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QStringList>
+#include <QSet>
 
 #include <cmath>
 #include <algorithm>
@@ -40,13 +43,12 @@
 #include <optional>
 
 #include "GridState.h"
+#include "generate_path.h"
 #include "Test_map_widget.h"
 #include "Point.h"
 
 namespace
 {
-constexpr int kChannelCount = 5;
-
 QCursor createDropperCursor()
 {
     QPixmap resourcePixmap(QStringLiteral(":/new_color_picker_icon.png"));
@@ -323,7 +325,7 @@ public:
 
     [[nodiscard]] bool channelIsEmpty() const
     {
-        return m_channelCombo && m_channelCombo->currentIndex() == 0;
+        return channelValue() == 0;
     }
 
     [[nodiscard]] bool hasValidSeedColor() const
@@ -397,6 +399,36 @@ public:
         return 0;
     }
 
+    void setChannel(int channel)
+    {
+        if (!m_channelCombo)
+            return;
+
+        const int index = indexForChannel(channel);
+        QSignalBlocker blocker(m_channelCombo);
+        if (index >= 0)
+            m_channelCombo->setCurrentIndex(index);
+        else
+            m_channelCombo->setCurrentIndex(0);
+
+        updateSeedColorState();
+    }
+
+    void setChannelEnabled(int channel, bool enabled)
+    {
+        if (!m_channelCombo)
+            return;
+
+        const int index = indexForChannel(channel);
+        if (index < 0)
+            return;
+
+        if (auto *model = qobject_cast<QStandardItemModel *>(m_channelCombo->model())) {
+            if (QStandardItem *item = model->item(index))
+                item->setEnabled(enabled);
+        }
+    }
+
     [[nodiscard]] std::optional<GridPreviewWindow::SeedDefinition> definition() const
     {
         if (!hasValidTargetColor() || !hasValidWeight())
@@ -454,8 +486,8 @@ private:
 
         auto *channelLabel = new QLabel(QStringLiteral("Channel"), this);
         m_channelCombo = new QComboBox(this);
-        m_channelCombo->addItem(QStringLiteral("empty"));
-        for (int i = 1; i <= kChannelCount; ++i)
+        m_channelCombo->addItem(QStringLiteral("empty"), QVariant(0));
+        for (int i = 1; i <= channel_number; ++i)
             m_channelCombo->addItem(QString::number(i), QVariant(i));
 
         auto *targetColorLabel = new QLabel(QStringLiteral("Target color"), this);
@@ -497,6 +529,22 @@ private:
         updateColorPreview(m_seedColorEdit->text(), m_seedColorPreview);
         updateColorPreview(m_targetColorEdit->text(), m_targetColorPreview);
         updateSeedColorState();
+    }
+
+    int indexForChannel(int channel) const
+    {
+        if (!m_channelCombo)
+            return -1;
+
+        for (int i = 0; i < m_channelCombo->count(); ++i) {
+            const QVariant data = m_channelCombo->itemData(i);
+            if (data.isValid() && data.toInt() == channel)
+                return i;
+            if (!data.isValid() && channel == 0 && i == 0)
+                return i;
+        }
+
+        return -1;
     }
 
     static QColor parseColorString(const QString &text, bool *ok = nullptr)
@@ -579,7 +627,7 @@ private:
 
     void updateSeedColorState()
     {
-        const bool channelIsEmpty = m_channelCombo && m_channelCombo->currentIndex() == 0;
+        const bool channelIsEmpty = channelValue() == 0;
 
         if (m_seedColorEdit)
             m_seedColorEdit->setEnabled(!channelIsEmpty);
@@ -601,6 +649,22 @@ private:
     ColorPreviewLabel *m_targetColorPreview = nullptr;
     QLineEdit *m_targetWeightEdit = nullptr;
 };
+}
+
+namespace
+{
+SeedItemWidget *seedWidgetAtRow(QListWidget *list, int row)
+{
+    if (!list || row < 0 || row >= list->count())
+        return nullptr;
+
+    QListWidgetItem *item = list->item(row);
+    if (!item)
+        return nullptr;
+
+    QWidget *widget = list->itemWidget(item);
+    return dynamic_cast<SeedItemWidget *>(widget);
+}
 }
 
 GridPreviewWindow::GridPreviewWindow(QWidget *parent)
@@ -710,9 +774,11 @@ GridPreviewWindow::GridPreviewWindow(QWidget *parent)
     });
     connect(m_seedListWidget, &QListWidget::currentRowChanged, this, [this]() {
         updateButtonStates();
+        updateChannelAvailability();
     });
 
     updateButtonStates();
+    updateChannelAvailability();
     updateColorSelectionUiState();
 
     resize(900, 650);
@@ -750,6 +816,8 @@ void GridPreviewWindow::resetState()
 
     if (m_seedListWidget)
         m_seedListWidget->clear();
+
+    updateChannelAvailability();
 
     if (m_imageLabel)
         m_imageLabel->clear();
@@ -798,14 +866,16 @@ void GridPreviewWindow::setImageWithGrid(const QPixmap &pixmap, double widthMete
     if (m_seedListWidget)
         m_seedListWidget->clear();
 
+    updateChannelAvailability();
+
     if (pixmap.isNull() || widthMeters <= 0.0 || heightMeters <= 0.0) {
         m_imageLabel->clear();
         updateButtonStates();
         return;
     }
 
-    const double horizontalSpacingPx = pixmap.width() * (kGridSpacingMeters / widthMeters);
-    const double verticalSpacingPx = pixmap.height() * (kGridSpacingMeters / heightMeters);
+    const double horizontalSpacingPx = pixmap.width() * (grid_size / widthMeters);
+    const double verticalSpacingPx = pixmap.height() * (grid_size / heightMeters);
 
     if (std::isfinite(horizontalSpacingPx) && horizontalSpacingPx >= 1.0)
         m_cellWidthPx = std::max(1, static_cast<int>(std::round(horizontalSpacingPx)));
@@ -1198,8 +1268,7 @@ void GridPreviewWindow::updateButtonStates()
         m_commitButton->setEnabled(commitEnabled);
     }
 
-    if (m_addSeedButton)
-        m_addSeedButton->setEnabled(true);
+    updateAddSeedButtonState();
 
     if (m_deleteSeedButton) {
         const bool hasSelection = m_seedListWidget && m_seedListWidget->currentRow() >= 0;
@@ -1208,6 +1277,68 @@ void GridPreviewWindow::updateButtonStates()
 
     if (m_applyChangesButton)
         m_applyChangesButton->setEnabled(allSeedInputsValid());
+}
+
+void GridPreviewWindow::updateAddSeedButtonState()
+{
+    if (!m_addSeedButton)
+        return;
+
+    const int seedCount = m_seedListWidget ? m_seedListWidget->count() : 0;
+    const int maxSeeds = channel_number + 1;
+    m_addSeedButton->setEnabled(seedCount < maxSeeds);
+}
+
+void GridPreviewWindow::updateChannelAvailability()
+{
+    if (!m_seedListWidget)
+        return;
+
+    const int count = m_seedListWidget->count();
+    for (int i = 0; i < count; ++i) {
+        SeedItemWidget *seedWidget = seedWidgetAtRow(m_seedListWidget, i);
+        if (!seedWidget)
+            continue;
+
+        QSet<int> usedChannels;
+        for (int j = 0; j < count; ++j) {
+            if (i == j)
+                continue;
+
+            if (SeedItemWidget *otherWidget = seedWidgetAtRow(m_seedListWidget, j))
+                usedChannels.insert(otherWidget->channelValue());
+        }
+
+        for (int channel = 0; channel <= channel_number; ++channel) {
+            const bool enabled = !usedChannels.contains(channel);
+            seedWidget->setChannelEnabled(channel, enabled || seedWidget->channelValue() == channel);
+        }
+    }
+
+    updateAddSeedButtonState();
+}
+
+int GridPreviewWindow::lowestAvailableChannel(int excludeRow) const
+{
+    if (!m_seedListWidget)
+        return 0;
+
+    QSet<int> usedChannels;
+    const int count = m_seedListWidget->count();
+    for (int i = 0; i < count; ++i) {
+        if (i == excludeRow)
+            continue;
+
+        if (SeedItemWidget *seedWidget = seedWidgetAtRow(m_seedListWidget, i))
+            usedChannels.insert(seedWidget->channelValue());
+    }
+
+    for (int channel = 0; channel <= channel_number; ++channel) {
+        if (!usedChannels.contains(channel))
+            return channel;
+    }
+
+    return 0;
 }
 
 void GridPreviewWindow::invalidateGeneratedEffect()
@@ -1231,6 +1362,7 @@ void GridPreviewWindow::updateSeedItemNumbers()
     }
 
     updateButtonStates();
+    updateChannelAvailability();
 }
 
 bool GridPreviewWindow::allSeedInputsValid() const
@@ -1317,6 +1449,7 @@ void GridPreviewWindow::connectSeedWidgetSignals(QWidget *widget)
                 stopColorPicking();
             invalidateGeneratedEffect();
             updateButtonStates();
+            updateChannelAvailability();
         });
 
     if (auto *preview = seedWidget->seedColorPreviewLabel())
@@ -1503,8 +1636,13 @@ void GridPreviewWindow::handleAddSeedClicked()
 
     connectSeedWidgetSignals(widget);
 
+    const int row = m_seedListWidget->row(item);
+    const int defaultChannel = lowestAvailableChannel(row);
+    widget->setChannel(defaultChannel);
+
     invalidateGeneratedEffect();
     updateButtonStates();
+    updateChannelAvailability();
 }
 
 void GridPreviewWindow::handleDeleteSeedClicked()

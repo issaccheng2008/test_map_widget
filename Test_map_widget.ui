@@ -124,7 +124,7 @@ Lon: ---</string>
             </property>
            </widget>
           </item>
-          <item>
+         <item>
           <widget class="QPushButton" name="setPositionButton">
            <property name="text">
             <string>Set Position</string>
@@ -137,6 +137,16 @@ Lon: ---</string>
            </property>
           </widget>
          </item>
+          <item>
+           <widget class="QPushButton" name="showWorkAreaButton">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Show Work Area</string>
+            </property>
+           </widget>
+          </item>
           <item>
            <widget class="QGroupBox" name="imagePlacementInfoGroup">
             <property name="title">
@@ -160,15 +170,25 @@ Lon: ---</string>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="openGridButton">
+          <widget class="QPushButton" name="openGridButton">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="toolTip">
+            <string>Open a new window with a gridded view of the pinned image</string>
+           </property>
+           <property name="text">
+            <string>Assign Seed</string>
+           </property>
+          </widget>
+         </item>
+          <item>
+           <widget class="QPushButton" name="generatePathButton">
             <property name="enabled">
              <bool>false</bool>
             </property>
-            <property name="toolTip">
-             <string>Open a new window with a gridded view of the pinned image</string>
-            </property>
             <property name="text">
-             <string>Assign Seed</string>
+             <string>Generate Path</string>
             </property>
            </widget>
           </item>
