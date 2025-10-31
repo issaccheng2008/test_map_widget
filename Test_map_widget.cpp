@@ -16,6 +16,7 @@
 #include "OverlayImageWidget.h"
 #include "GridPreviewWindow.h"
 #include "GridState.h"
+#include "generate_path.h"
 
 // Qt headers
 #include <QAbstractScrollArea>
@@ -33,6 +34,7 @@
 #include <QEvent>
 #include <QMouseEvent>
 #include <QWidget>
+#include <QVector2D>
 
 // Standard library
 #include <algorithm>
@@ -106,6 +108,9 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     m_graphicsOverlay = new GraphicsOverlay(this);
     m_mapView->graphicsOverlays()->append(m_graphicsOverlay);
 
+    m_workAreaOverlay = new GraphicsOverlay(this);
+    m_mapView->graphicsOverlays()->append(m_workAreaOverlay);
+
     m_obstacleOverlay = new GraphicsOverlay(this);
     m_mapView->graphicsOverlays()->append(m_obstacleOverlay);
 
@@ -119,6 +124,8 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     connect(ui->openGridButton, &QPushButton::clicked, this, &Test_map_widget::openGridPreview);
     connect(ui->addObstacleButton, &QPushButton::clicked, this, &Test_map_widget::handleObstacleActionButton);
     connect(ui->cancelObstacleButton, &QPushButton::clicked, this, &Test_map_widget::cancelObstacleCapture);
+    connect(ui->showWorkAreaButton, &QPushButton::clicked, this, &Test_map_widget::toggleWorkArea);
+    connect(ui->generatePathButton, &QPushButton::clicked, this, &Test_map_widget::generatePathForCurrentImage);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 
@@ -198,7 +205,7 @@ void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point
     if (length == 0.0)
         return;
 
-    constexpr double halfWidthMeters = 0.75; // Half of the 1.5 meter width
+    const double halfWidthMeters = car_length / 2.0;
     const double perpX = (-dy / length) * halfWidthMeters;
     const double perpY = (dx / length) * halfWidthMeters;
 
@@ -303,6 +310,140 @@ void Test_map_widget::updateCursorCoordinateDisplay(const QPoint &screenPoint)
     ui->cursorCoordinateValue->setText(tr("Lat: %1\nLon: %2").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6));
 }
 
+void Test_map_widget::clearWorkAreaGraphic()
+{
+    if (m_workAreaOverlay) {
+        if (auto *graphicsModel = m_workAreaOverlay->graphics())
+            graphicsModel->clear();
+    }
+
+    m_workAreaGraphic = nullptr;
+    m_cachedWorkArea.clear();
+}
+
+bool Test_map_widget::ensureWorkAreaGraphic()
+{
+    const auto polygonOptional = workAreaRectangle();
+    if (!polygonOptional || polygonOptional->isEmpty())
+        return false;
+
+    if (!m_workAreaOverlay)
+        return false;
+
+    auto *graphicsModel = m_workAreaOverlay->graphics();
+    if (!graphicsModel)
+        return false;
+
+    const QList<Point> polygonPoints = *polygonOptional;
+    if (polygonPoints.isEmpty())
+        return false;
+
+    PolygonBuilder builder(polygonPoints.first().spatialReference());
+    for (const Point &point : polygonPoints)
+        builder.addPoint(point);
+    builder.addPoint(polygonPoints.first());
+
+    const Geometry geometry = builder.toGeometry();
+
+    graphicsModel->clear();
+
+    const QColor outlineColor(0, 255, 0, 200);
+    auto *outlineSymbol = new SimpleLineSymbol(SimpleLineSymbolStyle::Solid, outlineColor, 1.5f, this);
+    const QColor fillColor(0, 255, 0, 40);
+    auto *fillSymbol = new SimpleFillSymbol(SimpleFillSymbolStyle::Solid, fillColor, outlineSymbol, this);
+
+    m_workAreaGraphic = new Graphic(geometry, fillSymbol, this);
+    graphicsModel->append(m_workAreaGraphic);
+
+    m_cachedWorkArea = polygonPoints;
+    return true;
+}
+
+std::optional<QList<Point>> Test_map_widget::workAreaRectangle() const
+{
+    if (!m_isImagePinned || m_pinnedImageMapPoints.size() < 4)
+        return std::nullopt;
+
+    const auto dimensions = pinnedImageDimensionsMeters();
+    if (!dimensions)
+        return std::nullopt;
+
+    const SpatialReference webMercator = SpatialReference::webMercator();
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+
+    const auto approximatelyEqual = [](const Point &a, const Point &b) {
+        constexpr double tolerance = 1e-6;
+        return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
+    };
+
+    QList<Point> uniquePoints;
+    uniquePoints.reserve(m_pinnedImageMapPoints.size());
+
+    for (const Point &mapPoint : m_pinnedImageMapPoints) {
+        Point projectedPoint = mapPoint;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != webMercator)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(mapPoint, webMercator));
+
+        bool duplicate = false;
+        for (const Point &existing : std::as_const(uniquePoints)) {
+            if (approximatelyEqual(existing, projectedPoint)) {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (!duplicate)
+            uniquePoints.append(projectedPoint);
+
+        if (uniquePoints.size() == 4)
+            break;
+    }
+
+    if (uniquePoints.size() < 4)
+        return std::nullopt;
+
+    const double widthMeters = dimensions->first;
+    const double heightMeters = dimensions->second;
+
+    QVector2D widthVector(uniquePoints.at(1).x() - uniquePoints.at(0).x(),
+                          uniquePoints.at(1).y() - uniquePoints.at(0).y());
+    QVector2D heightVector(uniquePoints.at(2).x() - uniquePoints.at(1).x(),
+                           uniquePoints.at(2).y() - uniquePoints.at(1).y());
+
+    if (widthVector.lengthSquared() <= 0.0 || heightVector.lengthSquared() <= 0.0)
+        return std::nullopt;
+
+    const QVector2D widthDirection = widthVector.normalized();
+    const QVector2D heightDirection = heightVector.normalized();
+
+    double centerX = 0.0;
+    double centerY = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        centerX += uniquePoints.at(i).x();
+        centerY += uniquePoints.at(i).y();
+    }
+    centerX /= 4.0;
+    centerY /= 4.0;
+
+    const double expandedHalfWidth = widthMeters / 2.0 + car_width;
+    const double expandedHalfHeight = heightMeters / 2.0 + car_width;
+
+    auto cornerAt = [&](double widthOffset, double heightOffset) {
+        const double x = centerX + widthDirection.x() * widthOffset + heightDirection.x() * heightOffset;
+        const double y = centerY + widthDirection.y() * widthOffset + heightDirection.y() * heightOffset;
+        const Point webPoint(x, y, webMercator);
+        return geometry_cast<Point>(GeometryEngine::project(webPoint, wgs84));
+    };
+
+    QList<Point> polygon;
+    polygon << cornerAt(-expandedHalfWidth, -expandedHalfHeight)
+            << cornerAt(expandedHalfWidth, -expandedHalfHeight)
+            << cornerAt(expandedHalfWidth, expandedHalfHeight)
+            << cornerAt(-expandedHalfWidth, expandedHalfHeight);
+
+    return polygon;
+}
+
 void Test_map_widget::importImage()
 {
     if (!m_imageOverlay)
@@ -314,6 +455,9 @@ void Test_map_widget::importImage()
     if (imagePinned) {
         m_isImagePinned = false;
         m_imageOverlay->setPinnedMode(false);
+        clearWorkAreaGraphic();
+        m_workAreaVisible = false;
+        m_cachedWorkArea.clear();
         statusBar()->showMessage(tr("Image unlocked. Drag to move, use the mouse wheel to zoom, and hold Shift while using the wheel to rotate."),
                                  8000);
         updateUiState();
@@ -366,6 +510,9 @@ void Test_map_widget::clearImportedImage()
         m_originalImagePixmap = QPixmap();
         m_currentImageSessionId = 0;
         m_gridWindowImageSessionId = 0;
+        clearWorkAreaGraphic();
+        m_workAreaVisible = false;
+        m_cachedWorkArea.clear();
         if (m_gridWindow) {
             m_gridWindow->resetState();
             m_gridWindow->hide();
@@ -402,6 +549,9 @@ void Test_map_widget::setImagePosition()
     m_pinnedImageMapPoints = mapPoints;
     m_isImagePinned = true;
     m_imageOverlay->setPinnedMode(true);
+    clearWorkAreaGraphic();
+    m_workAreaVisible = false;
+    m_cachedWorkArea.clear();
     updatePinnedImagePosition();
     ++m_imageSessionCounter;
     m_currentImageSessionId = m_imageSessionCounter;
@@ -441,6 +591,7 @@ void Test_map_widget::updatePinnedImagePosition()
         return;
 
     m_imageOverlay->applyViewportPolygon(viewportPolygon);
+
 }
 
 void Test_map_widget::openGridPreview()
@@ -515,6 +666,23 @@ void Test_map_widget::updateUiState()
 {
     const bool hasImage = m_imageOverlay && m_imageOverlay->hasImage();
     const bool hasPinnedImage = hasImage && m_isImagePinned && m_imageOverlay && m_imageOverlay->isPinned();
+
+    if (!hasPinnedImage) {
+        if (m_workAreaVisible)
+            clearWorkAreaGraphic();
+        m_workAreaVisible = false;
+        m_cachedWorkArea.clear();
+    }
+
+    if (ui->showWorkAreaButton) {
+        ui->showWorkAreaButton->setEnabled(hasPinnedImage);
+        ui->showWorkAreaButton->setText(m_workAreaVisible ? tr("Hide Work Area") : tr("Show Work Area"));
+    }
+
+    if (ui->generatePathButton) {
+        const bool canGeneratePath = hasPinnedImage && m_hasCommittedGridChanges && !g_channelGrid.isEmpty();
+        ui->generatePathButton->setEnabled(canGeneratePath);
+    }
 
     if (ui->importImageButton) {
         if (!hasImage) {
@@ -609,9 +777,8 @@ std::optional<double> Test_map_widget::currentImageAreaSquareMeters() const
 
 bool Test_map_widget::isCurrentImageAreaAcceptable() const
 {
-    constexpr double kMaxAreaSquareMeters = 10000.0;
     const auto areaOptional = currentImageAreaSquareMeters();
-    return areaOptional && *areaOptional < kMaxAreaSquareMeters;
+    return areaOptional && *areaOptional < max_image_area;
 }
 
 std::optional<std::pair<double, double>> Test_map_widget::currentImageDimensionsMeters() const
@@ -697,8 +864,7 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
     QString heightGridText = QStringLiteral("---");
 
     const auto areaOptional = currentImageAreaSquareMeters();
-    constexpr double kMaxAreaSquareMeters = 10000.0;
-    if (areaOptional && *areaOptional >= kMaxAreaSquareMeters) {
+    if (areaOptional && *areaOptional >= max_image_area) {
         const QString invalidText = QStringLiteral("--");
         setPlacementInfoText(invalidText, invalidText, invalidText, invalidText);
         return;
@@ -716,7 +882,7 @@ void Test_map_widget::updatePlacementInfoPanel(bool hasImage, bool hasPinnedImag
                 if (lengthMeters <= 0.0 || pixelCount <= 0)
                     return 0;
 
-                const double spacingPx = pixelCount * (kGridSpacingMeters / lengthMeters);
+                const double spacingPx = pixelCount * (grid_size / lengthMeters);
                 if (!std::isfinite(spacingPx) || spacingPx < 1.0)
                     return 0;
 
@@ -810,6 +976,66 @@ void Test_map_widget::cancelObstacleCapture()
 
     if (statusBar())
         statusBar()->showMessage(tr("Last obstacle deleted."), 5000);
+}
+
+void Test_map_widget::toggleWorkArea()
+{
+    if (!m_isImagePinned) {
+        if (statusBar())
+            statusBar()->showMessage(tr("Pin an image before showing the work area."), 5000);
+        return;
+    }
+
+    if (!m_workAreaVisible) {
+        if (!ensureWorkAreaGraphic()) {
+            if (statusBar())
+                statusBar()->showMessage(tr("Unable to determine the work area."), 5000);
+            return;
+        }
+        m_workAreaVisible = true;
+    } else {
+        clearWorkAreaGraphic();
+        m_workAreaVisible = false;
+    }
+
+    updateUiState();
+}
+
+void Test_map_widget::generatePathForCurrentImage()
+{
+    if (!m_isImagePinned || !m_imageOverlay || !m_imageOverlay->hasImage()) {
+        if (statusBar())
+            statusBar()->showMessage(tr("Pin an image before generating a path."), 5000);
+        return;
+    }
+
+    if (g_channelGrid.isEmpty()) {
+        if (statusBar())
+            statusBar()->showMessage(tr("Allocate seeds before generating a path."), 5000);
+        return;
+    }
+
+    std::optional<QList<Point>> workAreaPoints;
+    if (m_workAreaVisible && !m_cachedWorkArea.isEmpty())
+        workAreaPoints = m_cachedWorkArea;
+    else
+        workAreaPoints = workAreaRectangle();
+
+    if (!workAreaPoints) {
+        if (statusBar())
+            statusBar()->showMessage(tr("Unable to determine the work area."), 5000);
+        return;
+    }
+
+    QList<QList<Point>> obstaclePolygons;
+    obstaclePolygons.reserve(obstaclesList.size());
+    for (const obstacles &obstacle : obstaclesList)
+        obstaclePolygons.append(obstacle.vertices);
+
+    generate_path(*workAreaPoints, obstaclePolygons, g_channelGrid);
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Path generation requested."), 5000);
 }
 
 void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)

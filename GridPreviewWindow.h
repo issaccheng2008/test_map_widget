@@ -52,11 +52,14 @@ private:
     bool ensureOriginalGridImage();
     bool rebuildEffectPixmapsFromModifiedGrid();
     void updateButtonStates();
+    void updateAddSeedButtonState();
+    void updateChannelAvailability();
     void invalidateGeneratedEffect();
     void updateSeedItemNumbers();
     bool allSeedInputsValid() const;
     bool collectSeedDefinitions(QVector<SeedDefinition> &outSeeds) const;
     void connectSeedWidgetSignals(QWidget *widget);
+    int lowestAvailableChannel(int excludeRow) const;
 
     void handleAddSeedClicked();
     void handleDeleteSeedClicked();

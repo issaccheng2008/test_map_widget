@@ -67,6 +67,8 @@ private slots:
     void startObstacleCapture();
     void finishObstacleCapture();
     void cancelObstacleCapture();
+    void toggleWorkArea();
+    void generatePathForCurrentImage();
 
 private:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -85,10 +87,14 @@ private:
     std::optional<std::pair<double, double>> imageDimensionsMetersFromMapPoints(const QList<Esri::ArcGISRuntime::Point> &mapPoints) const;
     void updatePlacementInfoPanel(bool hasImage, bool hasPinnedImage);
     void updateCursorCoordinateDisplay(const QPoint &screenPoint);
+    bool ensureWorkAreaGraphic();
+    void clearWorkAreaGraphic();
+    std::optional<QList<Esri::ArcGISRuntime::Point>> workAreaRectangle() const;
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_graphicsOverlay = nullptr;
+    Esri::ArcGISRuntime::GraphicsOverlay *m_workAreaOverlay = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_obstacleOverlay = nullptr;
     Esri::ArcGISRuntime::GraphicsOverlay *m_obstacleEditingOverlay = nullptr;
     OverlayImageWidget *m_imageOverlay = nullptr;
@@ -103,6 +109,9 @@ private:
     quint64 m_imageSessionCounter = 0;
     quint64 m_currentImageSessionId = 0;
     quint64 m_gridWindowImageSessionId = 0;
+    QPointer<Esri::ArcGISRuntime::Graphic> m_workAreaGraphic;
+    QList<Esri::ArcGISRuntime::Point> m_cachedWorkArea;
+    bool m_workAreaVisible = false;
 
     Ui::Test_map_widget *ui = nullptr;
 };
