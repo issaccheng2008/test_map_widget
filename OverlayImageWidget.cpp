@@ -14,6 +14,8 @@
 #include <QtMath>
 #include <QWidget>
 
+#include "generate_path.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -140,6 +142,10 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     if (pixmap.isNull())
         return false;
 
+    const double area = static_cast<double>(pixmap.width()) * pixmap.height();
+    if (area > max_image_area)
+        return false;
+
     clearImage();
 
     m_pixmapItem = m_scene->addPixmap(pixmap);
@@ -168,11 +174,13 @@ bool OverlayImageWidget::loadImage(const QString &filePath)
     updateMouseTransparency();
     viewport()->update();
     show();
+    emit imageLoaded();
     return true;
 }
 
 void OverlayImageWidget::clearImage()
 {
+    const bool hadImage = m_pixmapItem != nullptr;
     if (m_pixmapItem) {
         if (m_rotationHandle) {
             delete m_rotationHandle;
@@ -196,11 +204,26 @@ void OverlayImageWidget::clearImage()
     m_isRotating = false;
     updateMouseTransparency();
     viewport()->update();
+    if (hadImage)
+        emit imageCleared();
 }
 
 bool OverlayImageWidget::hasImage() const
 {
     return m_pixmapItem != nullptr;
+}
+
+QPolygonF OverlayImageWidget::imagePolygonInView() const
+{
+    QPolygonF polygon;
+    if (!m_pixmapItem)
+        return polygon;
+
+    const QPolygonF scenePolygon = m_pixmapItem->mapToScene(m_pixmapItem->boundingRect());
+    for (const QPointF &point : scenePolygon)
+        polygon.append(QPointF(mapFromScene(point)));
+
+    return polygon;
 }
 
 void OverlayImageWidget::resizeEvent(QResizeEvent *event)

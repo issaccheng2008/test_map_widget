@@ -4,6 +4,7 @@
 #include <QGraphicsView>
 #include <QRegion>
 #include <QString>
+#include <QPolygonF>
 
 class QGraphicsPixmapItem;
 class QGraphicsItem;
@@ -19,6 +20,11 @@ public:
     [[nodiscard]] bool loadImage(const QString &filePath);
     void clearImage();
     [[nodiscard]] bool hasImage() const;
+    [[nodiscard]] QPolygonF imagePolygonInView() const;
+
+signals:
+    void imageLoaded();
+    void imageCleared();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

@@ -70,6 +70,36 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="showWorkAreaButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Show Work Area</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="allocateSeedsButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Allocate Seeds</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="generatePathButton">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="text">
+         <string>Generate Path</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="sideSpacer">
         <property name="orientation">
          <enum>Qt::Vertical</enum>
