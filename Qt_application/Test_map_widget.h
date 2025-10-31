@@ -17,7 +17,6 @@ namespace Esri::ArcGISRuntime {
 class Map;
 class MapGraphicsView;
 class GraphicsOverlay;
-class Point;
 class Graphic;
 } // namespace Esri::ArcGISRuntime
 
@@ -32,6 +31,8 @@ class Graphic;
 #include <QtGlobal>
 #include <optional>
 #include <utility>
+
+#include "Point.h"
 
 class OverlayImageWidget;
 class GridPreviewWindow;
