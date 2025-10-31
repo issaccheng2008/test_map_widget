@@ -17,7 +17,7 @@ TEMPLATE = app
 CONFIG += c++17
 
 # additional modules are pulled in via arcgisruntime.pri
-QT += widgets concurrent
+QT += widgets concurrent network
 
 lessThan(QT_MAJOR_VERSION, 6) {
     error("$$TARGET requires Qt 6.8.2")
@@ -43,7 +43,8 @@ SOURCES += \
     Test_map_widget.cpp \
     OverlayImageWidget.cpp \
     GridPreviewWindow.cpp \
-    generate_path.cpp
+    generate_path.cpp \
+    network.cpp
 
 HEADERS += \
     Test_map_widget.h \
@@ -51,7 +52,8 @@ HEADERS += \
     GridPreviewWindow.h \
     GridState.h \
     generate_path.h \
-    ImageScalingConstants.h
+    ImageScalingConstants.h \
+    network.h
 
 FORMS += \
     Test_map_widget.ui
