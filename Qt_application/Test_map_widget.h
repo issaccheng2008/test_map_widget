@@ -96,6 +96,7 @@ private:
     bool ensureWorkAreaGraphic();
     void clearWorkAreaGraphic();
     std::optional<QList<Esri::ArcGISRuntime::Point>> workAreaRectangle() const;
+    std::optional<QList<Esri::ArcGISRuntime::Point>> croppedPinnedImageCorners() const;
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
