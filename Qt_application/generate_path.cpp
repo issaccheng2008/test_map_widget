@@ -15,7 +15,11 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QObject>
+#include <QPair>
+#include <QLatin1Char>
+#include <QStringList>
 #include <QUrl>
+#include <QVector>
 #include <QVector2D>
 
 using namespace Esri::ArcGISRuntime;
@@ -56,19 +60,38 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
     if (!currentGpsPoint.isEmpty())
         qDebug() << "Current GPS location:" << currentGpsPoint.y() << currentGpsPoint.x();
 
-    const QString gpxDocument = QStringLiteral(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        "<gpx version=\"1.1\" creator=\"TestMapWidget\">\n"
-        "  <trk>\n"
-        "    <name>Generated Path</name>\n"
-        "    <trkseg>\n"
-        "      <trkpt lat=\"0\" lon=\"0\" />\n"
-        "      <trkpt lat=\"0\" lon=\"10\" />\n"
-        "      <trkpt lat=\"0\" lon=\"20\" />\n"
-        "      <trkpt lat=\"10\" lon=\"20\" />\n"
-        "    </trkseg>\n"
-        "  </trk>\n"
-        "</gpx>\n");
+    QVector<QPair<double, double>> pathCoordinates;
+    pathCoordinates.reserve(4);
+    pathCoordinates.append(QPair<double, double>(0.0, 0.0));
+    pathCoordinates.append(QPair<double, double>(0.0, 10.0));
+    pathCoordinates.append(QPair<double, double>(0.0, 20.0));
+    pathCoordinates.append(QPair<double, double>(10.0, 20.0));
+
+    QStringList trackPointLines;
+    trackPointLines.reserve(pathCoordinates.size());
+    for (const QPair<double, double> &coordinate : pathCoordinates) {
+        const double latitude = coordinate.first;
+        const double longitude = coordinate.second;
+        const QString trackPointLine =
+            QString("      <trkpt lat=\"%1\" lon=\"%2\" />").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6);
+        trackPointLines.append(trackPointLine);
+    }
+
+    const QString gpxHeader = QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                              "<gpx version=\"1.1\" creator=\"TestMapWidget\">\n"
+                                              "  <trk>\n"
+                                              "    <name>Generated Path</name>\n"
+                                              "    <trkseg>\n");
+    const QString gpxFooter = QStringLiteral("    </trkseg>\n"
+                                              "  </trk>\n"
+                                              "</gpx>\n");
+
+    QString gpxDocument = gpxHeader;
+    if (!trackPointLines.isEmpty()) {
+        gpxDocument += trackPointLines.join(QLatin1Char('\n'));
+        gpxDocument += QLatin1Char('\n');
+    }
+    gpxDocument += gpxFooter;
 
     QJsonObject payloadObject;
     payloadObject.insert(QStringLiteral("type"), QStringLiteral("file"));
