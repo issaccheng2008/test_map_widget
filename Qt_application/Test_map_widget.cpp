@@ -655,6 +655,8 @@ void Test_map_widget::clearImportedImage()
         m_originalImagePixmap = QPixmap();
         m_currentImageSessionId = 0;
         m_gridWindowImageSessionId = 0;
+        if (m_graphicsOverlay && m_graphicsOverlay->graphics())
+            m_graphicsOverlay->graphics()->clear();
         clearWorkAreaGraphic();
         m_workAreaVisible = false;
         m_cachedWorkArea.clear();
@@ -1216,7 +1218,15 @@ void Test_map_widget::generatePathForCurrentImage()
         return;
     }
 
-    generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint);
+    const QVector<Point> pathPoints = generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint);
+
+    if (pathPoints.size() >= 2 && m_graphicsOverlay && m_graphicsOverlay->graphics()) {
+        auto *graphicsModel = m_graphicsOverlay->graphics();
+        graphicsModel->clear();
+
+        for (int index = 1; index < pathPoints.size(); ++index)
+            drawLineBetweenCoordinates(pathPoints.at(index - 1), pathPoints.at(index));
+    }
 
     if (statusBar())
         statusBar()->showMessage(tr("Path generation requested."), 5000);

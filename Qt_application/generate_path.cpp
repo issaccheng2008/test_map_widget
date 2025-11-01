@@ -8,6 +8,7 @@
 #include "SpatialReference.h"
 
 #include <algorithm>
+#include <limits>
 #include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -15,12 +16,10 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QObject>
-#include <QPair>
 #include <QLatin1Char>
 #include <QStringList>
 #include <QUrl>
 #include <QVector>
-#include <QVector2D>
 
 using namespace Esri::ArcGISRuntime;
 
@@ -46,8 +45,14 @@ bool polygonHasRequiredCorners(const QList<Point> &polygon)
 
 } // namespace
 
-double dis(QPair<double,double> a,QPair<double,double> b){
-    return pow(a.first-b.first,2)+pow(a.second-b.second,2);
+double dis(const Point &a, const Point &b)
+{
+    if (a.isEmpty() || b.isEmpty())
+        return std::numeric_limits<double>::infinity();
+
+    const double dx = a.x() - b.x();
+    const double dy = a.y() - b.y();
+    return dx * dx + dy * dy;
 }
 
 
@@ -58,9 +63,9 @@ const double grid_size = 0.2;
 const double max_image_area = 10000.0;
 const int channel_number = 5;
 
-void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
-                   const QVector<QVector<int>> &channelGrid,
-                   const Esri::ArcGISRuntime::Point &currentGpsPoint)
+QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
+                             const QVector<QVector<int>> &channelGrid,
+                             const Esri::ArcGISRuntime::Point &currentGpsPoint)
 {
     qDebug() << "generate_path called";
     if (!currentGpsPoint.isEmpty())
@@ -70,7 +75,7 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
     const int totalColumns=channelGrid.begin()->size();
 
     //get starting and ending positions of each row
-    QVector<QPair<double, double>> pathCoordinates;
+    QVector<Point> pathCoordinates;
     QVector<std::array<int, 3>> p;
     bool ch;
     for (int i=0;i<totalRows;i++) {
@@ -88,8 +93,21 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
     }
 
     //append current coordinate
-    pathCoordinates.append(QPair<double, double>(currentGpsPoint.x(),currentGpsPoint.y()));
-    if(p.size()==0)return;
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+    const auto ensureWgs84 = [&wgs84](const Point &point) {
+        if (point.isEmpty())
+            return Point();
+        if (point.spatialReference().isEmpty() || point.spatialReference() == wgs84)
+            return Point(point.x(), point.y(), wgs84);
+        return geometry_cast<Point>(GeometryEngine::project(point, wgs84));
+    };
+
+    const Point currentPoint = ensureWgs84(currentGpsPoint);
+    if (currentPoint.isEmpty())
+        return {};
+
+    pathCoordinates.append(currentPoint);
+    if(p.size()==0)return pathCoordinates;
 
     //decide starting row
     double tt[2][2];
@@ -101,10 +119,13 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
         std::reverse(p.begin(),p.end());
 
     //generate path point
-    QPair<double,double> p1,p2;
+    Point p1,p2;
     for (int i=0;i<p.size();i++){
         p1=gridCellGpsCoordinate(p[i][0],p[i][1],pinnedImageCorners,totalRows,totalColumns);
         p2=gridCellGpsCoordinate(p[i][0],p[i][2],pinnedImageCorners,totalRows,totalColumns);
+        if (p1.isEmpty() || p2.isEmpty())
+            continue;
+
         if(dis(pathCoordinates.back(),p1)>dis(pathCoordinates.back(),p2))
             std::swap(p1,p2);
         pathCoordinates.append(p1),pathCoordinates.append(p2);
@@ -112,9 +133,11 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
 
     QStringList trackPointLines;
     trackPointLines.reserve(pathCoordinates.size());
-    for (const QPair<double, double> &coordinate : pathCoordinates) {
-        const double latitude = coordinate.first;
-        const double longitude = coordinate.second;
+    for (const Point &coordinate : pathCoordinates) {
+        if (coordinate.isEmpty())
+            continue;
+        const double latitude = coordinate.y();
+        const double longitude = coordinate.x();
         const QString trackPointLine =
             QString("      <trkpt lat=\"%1\" lon=\"%2\" />").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6);
         trackPointLines.append(trackPointLine);
@@ -165,8 +188,9 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
 
         reply->deleteLater();
     }
+    return pathCoordinates;
 }
-QPair<double,double> gridCellGpsCoordinate(int row,
+Point gridCellGpsCoordinate(int row,
                             int column,
                             const QList<Point> &pinnedImageCorners,
                             int totalRows,
@@ -208,5 +232,5 @@ QPair<double,double> gridCellGpsCoordinate(int row,
     const Point projected = geometry_cast<Point>(GeometryEngine::project(webPoint, wgs84));
     if (webPoint.isEmpty())
         return {};
-    return QPair<double,double> (projected.x(),projected.y());
+    return Point(projected.x(), projected.y(), wgs84);
 }
