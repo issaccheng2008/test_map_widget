@@ -496,6 +496,99 @@ std::optional<QList<Point>> Test_map_widget::workAreaRectangle() const
     return polygon;
 }
 
+std::optional<QList<Point>> Test_map_widget::croppedPinnedImageCorners() const
+{
+    if (!m_isImagePinned || m_pinnedImageMapPoints.size() < 4)
+        return std::nullopt;
+
+    if (g_channelGrid.isEmpty())
+        return std::nullopt;
+
+    const int gridRows = g_channelGrid.size();
+    int gridColumns = 0;
+    for (const QVector<int> &row : g_channelGrid) {
+        if (!row.isEmpty()) {
+            gridColumns = row.size();
+            break;
+        }
+    }
+
+    if (gridRows <= 0 || gridColumns <= 0)
+        return std::nullopt;
+
+    const SpatialReference webMercator = SpatialReference::webMercator();
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+
+    const auto approximatelyEqual = [](const Point &a, const Point &b) {
+        constexpr double tolerance = 1e-6;
+        return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
+    };
+
+    QList<Point> uniquePoints;
+    uniquePoints.reserve(m_pinnedImageMapPoints.size());
+
+    for (const Point &mapPoint : m_pinnedImageMapPoints) {
+        Point projectedPoint = mapPoint;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != webMercator)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(mapPoint, webMercator));
+
+        bool duplicate = false;
+        for (const Point &existing : std::as_const(uniquePoints)) {
+            if (approximatelyEqual(existing, projectedPoint)) {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (!duplicate)
+            uniquePoints.append(projectedPoint);
+
+        if (uniquePoints.size() == 4)
+            break;
+    }
+
+    if (uniquePoints.size() < 4)
+        return std::nullopt;
+
+    QVector2D widthVector(uniquePoints.at(1).x() - uniquePoints.at(0).x(),
+                          uniquePoints.at(1).y() - uniquePoints.at(0).y());
+    QVector2D heightVector(uniquePoints.at(2).x() - uniquePoints.at(1).x(),
+                           uniquePoints.at(2).y() - uniquePoints.at(1).y());
+
+    if (widthVector.lengthSquared() <= 0.0 || heightVector.lengthSquared() <= 0.0)
+        return std::nullopt;
+
+    const QVector2D widthDirection = widthVector.normalized();
+    const QVector2D heightDirection = heightVector.normalized();
+
+    double centerX = 0.0;
+    double centerY = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        centerX += uniquePoints.at(i).x();
+        centerY += uniquePoints.at(i).y();
+    }
+    centerX /= 4.0;
+    centerY /= 4.0;
+
+    const double croppedHalfWidth = static_cast<double>(gridColumns) * grid_size / 2.0;
+    const double croppedHalfHeight = static_cast<double>(gridRows) * grid_size / 2.0;
+
+    auto cornerAt = [&](double widthOffset, double heightOffset) {
+        const double x = centerX + widthDirection.x() * widthOffset + heightDirection.x() * heightOffset;
+        const double y = centerY + widthDirection.y() * widthOffset + heightDirection.y() * heightOffset;
+        const Point webPoint(x, y, webMercator);
+        return geometry_cast<Point>(GeometryEngine::project(webPoint, wgs84));
+    };
+
+    QList<Point> polygon;
+    polygon << cornerAt(-croppedHalfWidth, -croppedHalfHeight)
+            << cornerAt(croppedHalfWidth, -croppedHalfHeight)
+            << cornerAt(croppedHalfWidth, croppedHalfHeight)
+            << cornerAt(-croppedHalfWidth, croppedHalfHeight);
+
+    return polygon;
+}
+
 void Test_map_widget::importImage()
 {
     if (!m_imageOverlay)
@@ -1067,15 +1160,10 @@ void Test_map_widget::generatePathForCurrentImage()
         return;
     }
 
-    std::optional<QList<Point>> workAreaPoints;
-    if (m_workAreaVisible && !m_cachedWorkArea.isEmpty())
-        workAreaPoints = m_cachedWorkArea;
-    else
-        workAreaPoints = workAreaRectangle();
-
-    if (!workAreaPoints) {
+    const auto croppedCorners = croppedPinnedImageCorners();
+    if (!croppedCorners) {
         if (statusBar())
-            statusBar()->showMessage(tr("Unable to determine the work area."), 5000);
+            statusBar()->showMessage(tr("Unable to determine the pinned image footprint."), 5000);
         return;
     }
 
@@ -1090,7 +1178,7 @@ void Test_map_widget::generatePathForCurrentImage()
         return;
     }
 
-    generate_path(*workAreaPoints, g_channelGrid, m_latestGpsPoint);
+    generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint);
 
     if (statusBar())
         statusBar()->showMessage(tr("Path generation requested."), 5000);

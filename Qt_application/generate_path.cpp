@@ -58,7 +58,7 @@ const double grid_size = 0.2;
 const double max_image_area = 10000.0;
 const int channel_number = 5;
 
-void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
+void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
                    const QVector<QVector<int>> &channelGrid,
                    const Esri::ArcGISRuntime::Point &currentGpsPoint)
 {
@@ -94,17 +94,17 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
     //decide starting row
     double tt[2][2];
     for (int i=0;i<=1;i++)
-        tt[0][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.front()[0],p.front()[i],workAreaPolygon,totalRows,totalColumns));
+        tt[0][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.front()[0],p.front()[i],pinnedImageCorners,totalRows,totalColumns));
     for (int i=0;i<=1;i++)
-        tt[1][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.back()[0],p.back()[i],workAreaPolygon,totalRows,totalColumns));
+        tt[1][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.back()[0],p.back()[i],pinnedImageCorners,totalRows,totalColumns));
     if(std::min(tt[0][0],tt[0][1])>std::min(tt[1][0],tt[1][1]))
         std::reverse(p.begin(),p.end());
 
     //generate path point
     QPair<double,double> p1,p2;
     for (int i=0;i<p.size();i++){
-        p1=gridCellGpsCoordinate(p[i][0],p[i][1],workAreaPolygon,totalRows,totalColumns);
-        p2=gridCellGpsCoordinate(p[i][0],p[i][2],workAreaPolygon,totalRows,totalColumns);
+        p1=gridCellGpsCoordinate(p[i][0],p[i][1],pinnedImageCorners,totalRows,totalColumns);
+        p2=gridCellGpsCoordinate(p[i][0],p[i][2],pinnedImageCorners,totalRows,totalColumns);
         if(dis(pathCoordinates.back(),p1)>dis(pathCoordinates.back(),p2))
             std::swap(p1,p2);
         pathCoordinates.append(p1),pathCoordinates.append(p2);
@@ -168,11 +168,11 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
 }
 QPair<double,double> gridCellGpsCoordinate(int row,
                             int column,
-                            const QList<Point> &workAreaPolygon,
+                            const QList<Point> &pinnedImageCorners,
                             int totalRows,
                             int totalColumns)
 {
-    if (!polygonHasRequiredCorners(workAreaPolygon) || totalRows <= 0 || totalColumns <= 0)
+    if (!polygonHasRequiredCorners(pinnedImageCorners) || totalRows <= 0 || totalColumns <= 0)
         return {};
 
     if (row < 0 || column < 0 || row >= totalRows || column >= totalColumns)
@@ -181,10 +181,10 @@ QPair<double,double> gridCellGpsCoordinate(int row,
     const SpatialReference webMercator = SpatialReference::webMercator();
     const SpatialReference wgs84 = SpatialReference::wgs84();
 
-    const Point topLeft = projectToSpatialReference(workAreaPolygon.at(0), webMercator);
-    const Point topRight = projectToSpatialReference(workAreaPolygon.at(1), webMercator);
-    const Point bottomRight = projectToSpatialReference(workAreaPolygon.at(2), webMercator);
-    const Point bottomLeft = projectToSpatialReference(workAreaPolygon.at(3), webMercator);
+    const Point topLeft = projectToSpatialReference(pinnedImageCorners.at(0), webMercator);
+    const Point topRight = projectToSpatialReference(pinnedImageCorners.at(1), webMercator);
+    const Point bottomRight = projectToSpatialReference(pinnedImageCorners.at(2), webMercator);
+    const Point bottomLeft = projectToSpatialReference(pinnedImageCorners.at(3), webMercator);
 
     if (topLeft.isEmpty() || topRight.isEmpty() || bottomRight.isEmpty() || bottomLeft.isEmpty())
         return {};
