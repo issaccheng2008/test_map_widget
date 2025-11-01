@@ -21,6 +21,10 @@
 #include "camera_index.h"
 #include "board_config.h"
 
+#if defined(ARDUINO_ARCH_ESP32)
+#include <Arduino.h>
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -741,13 +745,24 @@ static esp_err_t file_upload_handler(httpd_req_t *req) {
       }
 
       decoded[decoded_index] = '\0';
+#if defined(ARDUINO_ARCH_ESP32)
+      Serial.println(F("Received GPX content:"));
+      Serial.println(decoded);
+      Serial.flush();
+#else
       log_i("Received GPX content:\n%s", decoded);
+#endif
       free(decoded);
     } else {
       log_w("Failed to allocate buffer for decoded content");
     }
   } else {
+#if defined(ARDUINO_ARCH_ESP32)
+    Serial.println(F("JSON payload missing content field"));
+    Serial.flush();
+#else
     log_w("JSON payload missing content field");
+#endif
   }
 
   free(body);
