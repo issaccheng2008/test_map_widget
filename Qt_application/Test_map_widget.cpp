@@ -768,8 +768,16 @@ void Test_map_widget::openGridPreview()
 
     g_pinnedImageFootprint.clear();
     g_pinnedImageFootprint.reserve(m_pinnedImageMapPoints.size());
-    for (const Point &point : m_pinnedImageMapPoints)
-        g_pinnedImageFootprint << QPointF(point.x(), point.y());
+
+    const SpatialReference webMercator = SpatialReference::webMercator();
+
+    for (const Point &point : m_pinnedImageMapPoints) {
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != webMercator)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, webMercator));
+
+        g_pinnedImageFootprint << QPointF(projectedPoint.x(), projectedPoint.y());
+    }
 
     if (m_originalImagePixmap.isNull() && !pixmap.isNull() && !m_hasCommittedGridChanges)
         m_originalImagePixmap = pixmap;
@@ -875,6 +883,8 @@ std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() 
     QList<Point> mapPoints;
     mapPoints.reserve(viewportPolygon.size());
 
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+
     const auto pointsApproximatelyEqual = [](const Point &a, const Point &b) {
         constexpr double tolerance = 1e-6;
         return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
@@ -882,9 +892,14 @@ std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() 
 
     for (const QPointF &screenPointF : viewportPolygon) {
         const Point mapPoint = m_mapView->screenToLocation(screenPointF.x(), screenPointF.y());
-        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), mapPoint))
+
+        Point gpsPoint = mapPoint;
+        if (!gpsPoint.isEmpty() && (gpsPoint.spatialReference().isEmpty() || gpsPoint.spatialReference() != wgs84))
+            gpsPoint = geometry_cast<Point>(GeometryEngine::project(mapPoint, wgs84));
+
+        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), gpsPoint))
             continue;
-        mapPoints.append(mapPoint);
+        mapPoints.append(gpsPoint);
     }
 
     if (mapPoints.size() > 1 && pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
@@ -1073,12 +1088,35 @@ void Test_map_widget::finishObstacleCapture()
     if (!m_isCapturingObstacle || m_currentObstaclePoints.size() < 3 || !m_obstacleOverlay)
         return;
 
+    SpatialReference targetReference = SpatialReference::webMercator();
+    if (m_mapView && m_mapView->map()) {
+        const SpatialReference mapReference = m_mapView->map()->spatialReference();
+        if (!mapReference.isEmpty())
+            targetReference = mapReference;
+    }
+
+    QList<Point> projectedPoints;
+    projectedPoints.reserve(m_currentObstaclePoints.size());
+    for (const auto &point : m_currentObstaclePoints) {
+        if (point.isEmpty())
+            continue;
+
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != targetReference)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, targetReference));
+
+        projectedPoints.append(projectedPoint);
+    }
+
+    if (projectedPoints.size() < 3)
+        return;
+
     obstacles newObstacle;
     newObstacle.vertices = m_currentObstaclePoints;
     obstaclesList.append(newObstacle);
 
-    PolygonBuilder builder(m_currentObstaclePoints.first().spatialReference());
-    for (const auto &point : m_currentObstaclePoints)
+    PolygonBuilder builder(targetReference);
+    for (const auto &point : std::as_const(projectedPoints))
         builder.addPoint(point);
 
     const QColor fillColor(255, 0, 0, 100);
@@ -1189,8 +1227,14 @@ void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
     if (!m_isCapturingObstacle || !m_mapView)
         return;
 
-    const Point mapPoint = m_mapView->screenToLocation(screenPoint.x(),screenPoint.y());
-    m_currentObstaclePoints.append(mapPoint);
+    const Point mapPoint = m_mapView->screenToLocation(screenPoint.x(), screenPoint.y());
+
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+    Point gpsPoint = mapPoint;
+    if (!gpsPoint.isEmpty() && (gpsPoint.spatialReference().isEmpty() || gpsPoint.spatialReference() != wgs84))
+        gpsPoint = geometry_cast<Point>(GeometryEngine::project(mapPoint, wgs84));
+
+    m_currentObstaclePoints.append(gpsPoint);
 
     rebuildObstaclePreview();
 
@@ -1205,17 +1249,35 @@ void Test_map_widget::rebuildObstaclePreview()
     auto *graphicsModel = m_obstacleEditingOverlay->graphics();
     graphicsModel->clear();
 
-    const QColor markerColor(255, 0, 0);
-    for (const auto &point : m_currentObstaclePoints) {
-        auto *markerSymbol = new SimpleMarkerSymbol(SimpleMarkerSymbolStyle::Circle, markerColor, 8.0f, this);
-        graphicsModel->append(new Graphic(point, markerSymbol, this));
+    SpatialReference targetReference = SpatialReference::webMercator();
+    if (m_mapView && m_mapView->map()) {
+        const SpatialReference mapReference = m_mapView->map()->spatialReference();
+        if (!mapReference.isEmpty())
+            targetReference = mapReference;
     }
 
-    if (m_currentObstaclePoints.size() < 3)
+    QList<Point> projectedPoints;
+    projectedPoints.reserve(m_currentObstaclePoints.size());
+
+    const QColor markerColor(255, 0, 0);
+    for (const auto &point : m_currentObstaclePoints) {
+        if (point.isEmpty())
+            continue;
+
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != targetReference)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, targetReference));
+
+        auto *markerSymbol = new SimpleMarkerSymbol(SimpleMarkerSymbolStyle::Circle, markerColor, 8.0f, this);
+        graphicsModel->append(new Graphic(projectedPoint, markerSymbol, this));
+        projectedPoints.append(projectedPoint);
+    }
+
+    if (projectedPoints.size() < 3)
         return;
 
-    PolygonBuilder builder(m_currentObstaclePoints.first().spatialReference());
-    for (const auto &point : m_currentObstaclePoints)
+    PolygonBuilder builder(targetReference);
+    for (const auto &point : std::as_const(projectedPoints))
         builder.addPoint(point);
 
     const QColor fillColor(255, 0, 0, 80);
