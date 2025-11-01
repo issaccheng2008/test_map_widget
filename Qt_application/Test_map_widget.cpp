@@ -1073,12 +1073,35 @@ void Test_map_widget::finishObstacleCapture()
     if (!m_isCapturingObstacle || m_currentObstaclePoints.size() < 3 || !m_obstacleOverlay)
         return;
 
+    SpatialReference targetReference = SpatialReference::webMercator();
+    if (m_mapView && m_mapView->map()) {
+        const SpatialReference mapReference = m_mapView->map()->spatialReference();
+        if (!mapReference.isEmpty())
+            targetReference = mapReference;
+    }
+
+    QList<Point> projectedPoints;
+    projectedPoints.reserve(m_currentObstaclePoints.size());
+    for (const auto &point : m_currentObstaclePoints) {
+        if (point.isEmpty())
+            continue;
+
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != targetReference)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, targetReference));
+
+        projectedPoints.append(projectedPoint);
+    }
+
+    if (projectedPoints.size() < 3)
+        return;
+
     obstacles newObstacle;
     newObstacle.vertices = m_currentObstaclePoints;
     obstaclesList.append(newObstacle);
 
-    PolygonBuilder builder(m_currentObstaclePoints.first().spatialReference());
-    for (const auto &point : m_currentObstaclePoints)
+    PolygonBuilder builder(targetReference);
+    for (const auto &point : std::as_const(projectedPoints))
         builder.addPoint(point);
 
     const QColor fillColor(255, 0, 0, 100);
@@ -1189,8 +1212,14 @@ void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
     if (!m_isCapturingObstacle || !m_mapView)
         return;
 
-    const Point mapPoint = m_mapView->screenToLocation(screenPoint.x(),screenPoint.y());
-    m_currentObstaclePoints.append(mapPoint);
+    const Point mapPoint = m_mapView->screenToLocation(screenPoint.x(), screenPoint.y());
+
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+    Point gpsPoint = mapPoint;
+    if (!gpsPoint.isEmpty() && (gpsPoint.spatialReference().isEmpty() || gpsPoint.spatialReference() != wgs84))
+        gpsPoint = geometry_cast<Point>(GeometryEngine::project(mapPoint, wgs84));
+
+    m_currentObstaclePoints.append(gpsPoint);
 
     rebuildObstaclePreview();
 
@@ -1205,17 +1234,35 @@ void Test_map_widget::rebuildObstaclePreview()
     auto *graphicsModel = m_obstacleEditingOverlay->graphics();
     graphicsModel->clear();
 
-    const QColor markerColor(255, 0, 0);
-    for (const auto &point : m_currentObstaclePoints) {
-        auto *markerSymbol = new SimpleMarkerSymbol(SimpleMarkerSymbolStyle::Circle, markerColor, 8.0f, this);
-        graphicsModel->append(new Graphic(point, markerSymbol, this));
+    SpatialReference targetReference = SpatialReference::webMercator();
+    if (m_mapView && m_mapView->map()) {
+        const SpatialReference mapReference = m_mapView->map()->spatialReference();
+        if (!mapReference.isEmpty())
+            targetReference = mapReference;
     }
 
-    if (m_currentObstaclePoints.size() < 3)
+    QList<Point> projectedPoints;
+    projectedPoints.reserve(m_currentObstaclePoints.size());
+
+    const QColor markerColor(255, 0, 0);
+    for (const auto &point : m_currentObstaclePoints) {
+        if (point.isEmpty())
+            continue;
+
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != targetReference)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, targetReference));
+
+        auto *markerSymbol = new SimpleMarkerSymbol(SimpleMarkerSymbolStyle::Circle, markerColor, 8.0f, this);
+        graphicsModel->append(new Graphic(projectedPoint, markerSymbol, this));
+        projectedPoints.append(projectedPoint);
+    }
+
+    if (projectedPoints.size() < 3)
         return;
 
-    PolygonBuilder builder(m_currentObstaclePoints.first().spatialReference());
-    for (const auto &point : m_currentObstaclePoints)
+    PolygonBuilder builder(targetReference);
+    for (const auto &point : std::as_const(projectedPoints))
         builder.addPoint(point);
 
     const QColor fillColor(255, 0, 0, 80);
