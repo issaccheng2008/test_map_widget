@@ -768,8 +768,16 @@ void Test_map_widget::openGridPreview()
 
     g_pinnedImageFootprint.clear();
     g_pinnedImageFootprint.reserve(m_pinnedImageMapPoints.size());
-    for (const Point &point : m_pinnedImageMapPoints)
-        g_pinnedImageFootprint << QPointF(point.x(), point.y());
+
+    const SpatialReference webMercator = SpatialReference::webMercator();
+
+    for (const Point &point : m_pinnedImageMapPoints) {
+        Point projectedPoint = point;
+        if (projectedPoint.spatialReference().isEmpty() || projectedPoint.spatialReference() != webMercator)
+            projectedPoint = geometry_cast<Point>(GeometryEngine::project(point, webMercator));
+
+        g_pinnedImageFootprint << QPointF(projectedPoint.x(), projectedPoint.y());
+    }
 
     if (m_originalImagePixmap.isNull() && !pixmap.isNull() && !m_hasCommittedGridChanges)
         m_originalImagePixmap = pixmap;
@@ -875,6 +883,8 @@ std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() 
     QList<Point> mapPoints;
     mapPoints.reserve(viewportPolygon.size());
 
+    const SpatialReference wgs84 = SpatialReference::wgs84();
+
     const auto pointsApproximatelyEqual = [](const Point &a, const Point &b) {
         constexpr double tolerance = 1e-6;
         return std::abs(a.x() - b.x()) < tolerance && std::abs(a.y() - b.y()) < tolerance;
@@ -882,9 +892,14 @@ std::optional<QList<Point>> Test_map_widget::mapPointsForCurrentImageViewport() 
 
     for (const QPointF &screenPointF : viewportPolygon) {
         const Point mapPoint = m_mapView->screenToLocation(screenPointF.x(), screenPointF.y());
-        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), mapPoint))
+
+        Point gpsPoint = mapPoint;
+        if (!gpsPoint.isEmpty() && (gpsPoint.spatialReference().isEmpty() || gpsPoint.spatialReference() != wgs84))
+            gpsPoint = geometry_cast<Point>(GeometryEngine::project(mapPoint, wgs84));
+
+        if (!mapPoints.isEmpty() && pointsApproximatelyEqual(mapPoints.constLast(), gpsPoint))
             continue;
-        mapPoints.append(mapPoint);
+        mapPoints.append(gpsPoint);
     }
 
     if (mapPoints.size() > 1 && pointsApproximatelyEqual(mapPoints.first(), mapPoints.last()))
