@@ -12,11 +12,11 @@ extern const double grid_size;
 extern const double max_image_area;
 extern const int channel_number;
 
-void generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
-                   const QVector<QVector<int>> &channelGrid,
-                   const Esri::ArcGISRuntime::Point &currentGpsPoint);
+QVector<Esri::ArcGISRuntime::Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
+                                                  const QVector<QVector<int>> &channelGrid,
+                                                  const Esri::ArcGISRuntime::Point &currentGpsPoint);
 
-QPair<double,double> gridCellGpsCoordinate(int row,
+Esri::ArcGISRuntime::Point gridCellGpsCoordinate(int row,
                                                  int column,
                                                  const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
                                                  int totalRows,
