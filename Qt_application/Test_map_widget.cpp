@@ -32,6 +32,7 @@
 #include <QRegularExpression>
 #include <QStatusBar>
 #include <QStringList>
+#include <QSlider>
 #include <QSignalBlocker>
 #include <QEvent>
 #include <QMouseEvent>
@@ -135,6 +136,19 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
 
+    if (ui->pathProgressLabel)
+        ui->pathProgressLabel->setVisible(false);
+
+    if (ui->pathProgressSlider) {
+        ui->pathProgressSlider->setEnabled(false);
+        ui->pathProgressSlider->setVisible(false);
+        ui->pathProgressSlider->setMinimum(0);
+        ui->pathProgressSlider->setMaximum(0);
+        ui->pathProgressSlider->setSingleStep(1);
+        ui->pathProgressSlider->setPageStep(1);
+        connect(ui->pathProgressSlider, &QSlider::valueChanged, this, &Test_map_widget::handlePathProgressChanged);
+    }
+
     m_gpsClient = new GpsNetworkClient(QUrl(QStringLiteral("http://192.168.43.95/gps")), this);
     connect(m_gpsClient, &GpsNetworkClient::coordinateReceived, this, &Test_map_widget::updateGpsCoordinate);
     connect(m_gpsClient, &GpsNetworkClient::networkError, this, &Test_map_widget::handleGpsError);
@@ -231,6 +245,11 @@ void Test_map_widget::handleGpsError(const QString &message)
         bar->showMessage(message, 3000);
 }
 
+void Test_map_widget::handlePathProgressChanged(int segmentCount)
+{
+    updatePathGraphics(segmentCount);
+}
+
 void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point &end)
 {
     if (!m_graphicsOverlay)
@@ -281,6 +300,50 @@ void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point
 
     auto *rectangleGraphic = new Graphic(rectangleWgs84, fillSymbol, this);
     m_graphicsOverlay->graphics()->append(rectangleGraphic);
+}
+
+void Test_map_widget::updatePathGraphics(int segmentsToShow)
+{
+    if (!m_graphicsOverlay || !m_graphicsOverlay->graphics())
+        return;
+
+    auto *graphicsModel = m_graphicsOverlay->graphics();
+    graphicsModel->clear();
+
+    if (m_generatedPathPoints.size() < 2)
+        return;
+
+    const int maxSegments = m_generatedPathPoints.size() - 1;
+    const int clampedSegments = std::clamp(segmentsToShow, 0, maxSegments);
+
+    if (clampedSegments <= 0)
+        return;
+
+    for (int index = 1; index <= clampedSegments; ++index)
+        drawLineBetweenCoordinates(m_generatedPathPoints.at(index - 1), m_generatedPathPoints.at(index));
+}
+
+void Test_map_widget::resetPathVisualization()
+{
+    m_generatedPathPoints.clear();
+
+    if (m_graphicsOverlay && m_graphicsOverlay->graphics())
+        m_graphicsOverlay->graphics()->clear();
+
+    if (!ui)
+        return;
+
+    if (ui->pathProgressSlider) {
+        QSignalBlocker blocker(ui->pathProgressSlider);
+        ui->pathProgressSlider->setEnabled(false);
+        ui->pathProgressSlider->setVisible(false);
+        ui->pathProgressSlider->setMinimum(0);
+        ui->pathProgressSlider->setMaximum(0);
+        ui->pathProgressSlider->setValue(0);
+    }
+
+    if (ui->pathProgressLabel)
+        ui->pathProgressLabel->setVisible(false);
 }
 
 bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
@@ -598,6 +661,7 @@ void Test_map_widget::importImage()
     const bool imagePinned = hasImage && m_isImagePinned && m_imageOverlay->isPinned();
 
     if (imagePinned) {
+        resetPathVisualization();
         m_isImagePinned = false;
         m_imageOverlay->setPinnedMode(false);
         clearWorkAreaGraphic();
@@ -617,6 +681,7 @@ void Test_map_widget::importImage()
         return;
 
     if (m_imageOverlay->loadImage(filePath)) {
+        resetPathVisualization();
         m_isImagePinned = false;
         m_pinnedImageMapPoints.clear();
         m_imageOverlay->setPinnedMode(false);
@@ -646,6 +711,7 @@ void Test_map_widget::clearImportedImage()
         return;
 
     if (m_imageOverlay->hasImage()) {
+        resetPathVisualization();
         m_imageOverlay->clearImage();
         m_isImagePinned = false;
         m_pinnedImageMapPoints.clear();
@@ -655,8 +721,6 @@ void Test_map_widget::clearImportedImage()
         m_originalImagePixmap = QPixmap();
         m_currentImageSessionId = 0;
         m_gridWindowImageSessionId = 0;
-        if (m_graphicsOverlay && m_graphicsOverlay->graphics())
-            m_graphicsOverlay->graphics()->clear();
         clearWorkAreaGraphic();
         m_workAreaVisible = false;
         m_cachedWorkArea.clear();
@@ -696,6 +760,7 @@ void Test_map_widget::setImagePosition()
     m_pinnedImageMapPoints = mapPoints;
     m_isImagePinned = true;
     m_imageOverlay->setPinnedMode(true);
+    resetPathVisualization();
     clearWorkAreaGraphic();
     m_workAreaVisible = false;
     m_cachedWorkArea.clear();
@@ -802,6 +867,8 @@ void Test_map_widget::applyCommittedGridEffect(const QPixmap &pixmap, const QVec
 {
     if (!m_imageOverlay || pixmap.isNull())
         return;
+
+    resetPathVisualization();
 
     g_channelGrid = seedChannels;
 
@@ -1221,11 +1288,30 @@ void Test_map_widget::generatePathForCurrentImage()
     const QVector<Point> pathPoints = generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint);
 
     if (pathPoints.size() >= 2 && m_graphicsOverlay && m_graphicsOverlay->graphics()) {
+        m_generatedPathPoints = pathPoints;
+
         auto *graphicsModel = m_graphicsOverlay->graphics();
         graphicsModel->clear();
 
-        for (int index = 1; index < pathPoints.size(); ++index)
-            drawLineBetweenCoordinates(pathPoints.at(index - 1), pathPoints.at(index));
+        const int segmentCount = m_generatedPathPoints.size() - 1;
+
+        if (ui->pathProgressSlider) {
+            {
+                QSignalBlocker blocker(ui->pathProgressSlider);
+                ui->pathProgressSlider->setMinimum(0);
+                ui->pathProgressSlider->setMaximum(segmentCount);
+                ui->pathProgressSlider->setSingleStep(1);
+                ui->pathProgressSlider->setPageStep(1);
+                ui->pathProgressSlider->setEnabled(true);
+                ui->pathProgressSlider->setVisible(true);
+            }
+            ui->pathProgressSlider->setValue(segmentCount);
+        }
+
+        if (ui->pathProgressLabel)
+            ui->pathProgressLabel->setVisible(true);
+
+        updatePathGraphics(segmentCount);
     }
 
     if (statusBar())

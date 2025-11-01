@@ -75,6 +75,7 @@ private slots:
     void generatePathForCurrentImage();
     void updateGpsCoordinate(double latitude, double longitude);
     void handleGpsError(const QString &message);
+    void handlePathProgressChanged(int segmentCount);
 
 private:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -97,6 +98,8 @@ private:
     void clearWorkAreaGraphic();
     std::optional<QList<Esri::ArcGISRuntime::Point>> workAreaRectangle() const;
     std::optional<QList<Esri::ArcGISRuntime::Point>> croppedPinnedImageCorners() const;
+    void updatePathGraphics(int segmentsToShow);
+    void resetPathVisualization();
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
@@ -125,6 +128,8 @@ private:
     Esri::ArcGISRuntime::Point m_latestGpsPoint;
     bool m_hasLatestGpsPoint = false;
     GpsNetworkClient *m_gpsClient = nullptr;
+
+    QVector<Esri::ArcGISRuntime::Point> m_generatedPathPoints;
 
     Ui::Test_map_widget *ui = nullptr;
 };
