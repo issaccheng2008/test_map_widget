@@ -205,7 +205,8 @@ QPair<double,double> gridCellGpsCoordinate(int row,
     const double interpolatedY = topY + (bottomY - topY) * rowFraction;
 
     const Point webPoint(interpolatedX, interpolatedY, webMercator);
+    const Point projected = geometry_cast<Point>(GeometryEngine::project(webPoint, wgs84));
     if (webPoint.isEmpty())
         return {};
-    return QPair<double,double> (webPoint.x()/1e5,webPoint.y()/1e5);
+    return QPair<double,double> (projected.x(),projected.y());
 }
