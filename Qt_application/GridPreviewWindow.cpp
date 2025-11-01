@@ -47,7 +47,10 @@
 #include "GridState.h"
 #include "generate_path.h"
 #include "Test_map_widget.h"
+#include "Geometry.h"
+#include "GeometryEngine.h"
 #include "Point.h"
+#include "SpatialReference.h"
 
 namespace
 {
@@ -1199,14 +1202,25 @@ void GridPreviewWindow::updateObstacleMask()
 
     const QRectF imageBounds(0.0, 0.0, m_gridColumns * m_cellWidthPx, m_gridRows * m_cellHeightPx);
 
+    const Esri::ArcGISRuntime::SpatialReference targetReference = Esri::ArcGISRuntime::SpatialReference::webMercator();
+
     for (const obstacles &obstacle : obstaclesList) {
         if (obstacle.vertices.size() < 3)
             continue;
 
         QPolygonF imagePolygon;
         imagePolygon.reserve(obstacle.vertices.size());
-        for (const Esri::ArcGISRuntime::Point &vertex : obstacle.vertices)
-            imagePolygon << transform.map(QPointF(vertex.x(), vertex.y()));
+        for (const Esri::ArcGISRuntime::Point &vertex : obstacle.vertices) {
+            if (vertex.isEmpty())
+                continue;
+
+            Esri::ArcGISRuntime::Point mapPoint = vertex;
+            if (mapPoint.spatialReference().isEmpty() || mapPoint.spatialReference() != targetReference)
+                mapPoint = Esri::ArcGISRuntime::geometry_cast<Esri::ArcGISRuntime::Point>(
+                    Esri::ArcGISRuntime::GeometryEngine::project(vertex, targetReference));
+
+            imagePolygon << transform.map(QPointF(mapPoint.x(), mapPoint.y()));
+        }
 
         if (imagePolygon.size() < 3)
             continue;
