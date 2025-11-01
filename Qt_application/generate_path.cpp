@@ -89,6 +89,7 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         for (int j=channelGrid[i].size()-1;j>=0;j--)
             if(channelGrid[i][j]>0){
                 p.back()[2]=j;
+                break;
             }
     }
 
@@ -115,16 +116,20 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         tt[0][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.front()[0],p.front()[i],pinnedImageCorners,totalRows,totalColumns));
     for (int i=0;i<=1;i++)
         tt[1][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.back()[0],p.back()[i],pinnedImageCorners,totalRows,totalColumns));
+
+    int r=-1,ad=6;
     if(std::min(tt[0][0],tt[0][1])>std::min(tt[1][0],tt[1][1]))
-        std::reverse(p.begin(),p.end());
+        std::reverse(p.begin(),p.end()),r=totalColumns,ad=-6;
 
     //generate path point
     Point p1,p2;
-    for (int i=0;i<p.size();i++){
-        p1=gridCellGpsCoordinate(p[i][0],p[i][1],pinnedImageCorners,totalRows,totalColumns);
-        p2=gridCellGpsCoordinate(p[i][0],p[i][2],pinnedImageCorners,totalRows,totalColumns);
-        if (p1.isEmpty() || p2.isEmpty())
-            continue;
+
+    for (int i=0,mini,maxi;i<p.size();i++){
+        r=p[i][0]+ad,mini=totalColumns-1,maxi=0;
+        for (;i<p.size()&&(ad>0?p[i][0]<=r:p[i][0]>=r);i++)
+            mini=std::min(mini,p[i][1]),maxi=std::max(maxi,p[i][2]);
+        p1=gridCellGpsCoordinate(r-ad/2,mini,pinnedImageCorners,totalRows,totalColumns);
+        p2=gridCellGpsCoordinate(r-ad/2,maxi,pinnedImageCorners,totalRows,totalColumns);
 
         if(dis(pathCoordinates.back(),p1)>dis(pathCoordinates.back(),p2))
             std::swap(p1,p2);
