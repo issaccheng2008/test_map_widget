@@ -655,6 +655,8 @@ void Test_map_widget::clearImportedImage()
         m_originalImagePixmap = QPixmap();
         m_currentImageSessionId = 0;
         m_gridWindowImageSessionId = 0;
+        if (m_graphicsOverlay && m_graphicsOverlay->graphics())
+            m_graphicsOverlay->graphics()->clear();
         clearWorkAreaGraphic();
         m_workAreaVisible = false;
         m_cachedWorkArea.clear();
