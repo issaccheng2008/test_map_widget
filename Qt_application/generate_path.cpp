@@ -8,6 +8,18 @@
 #include "SpatialReference.h"
 
 #include <algorithm>
+#include <QEventLoop>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QObject>
+#include <QPair>
+#include <QLatin1Char>
+#include <QStringList>
+#include <QUrl>
+#include <QVector>
 #include <QVector2D>
 
 using namespace Esri::ArcGISRuntime;
@@ -47,6 +59,69 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
     qDebug() << "generate_path called";
     if (!currentGpsPoint.isEmpty())
         qDebug() << "Current GPS location:" << currentGpsPoint.y() << currentGpsPoint.x();
+
+    QVector<QPair<double, double>> pathCoordinates;
+    pathCoordinates.reserve(4);
+    pathCoordinates.append(QPair<double, double>(0.0, 0.0));
+    pathCoordinates.append(QPair<double, double>(0.0, 10.0));
+    pathCoordinates.append(QPair<double, double>(0.0, 20.0));
+    pathCoordinates.append(QPair<double, double>(10.0, 20.0));
+
+    QStringList trackPointLines;
+    trackPointLines.reserve(pathCoordinates.size());
+    for (const QPair<double, double> &coordinate : pathCoordinates) {
+        const double latitude = coordinate.first;
+        const double longitude = coordinate.second;
+        const QString trackPointLine =
+            QString("      <trkpt lat=\"%1\" lon=\"%2\" />").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6);
+        trackPointLines.append(trackPointLine);
+    }
+
+    const QString gpxHeader = QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                              "<gpx version=\"1.1\" creator=\"TestMapWidget\">\n"
+                                              "  <trk>\n"
+                                              "    <name>Generated Path</name>\n"
+                                              "    <trkseg>\n");
+    const QString gpxFooter = QStringLiteral("    </trkseg>\n"
+                                              "  </trk>\n"
+                                              "</gpx>\n");
+
+    QString gpxDocument = gpxHeader;
+    if (!trackPointLines.isEmpty()) {
+        gpxDocument += trackPointLines.join(QLatin1Char('\n'));
+        gpxDocument += QLatin1Char('\n');
+    }
+    gpxDocument += gpxFooter;
+
+    QJsonObject payloadObject;
+    payloadObject.insert(QStringLiteral("type"), QStringLiteral("file"));
+    payloadObject.insert(QStringLiteral("content"), gpxDocument);
+
+    const QJsonDocument payloadDocument(payloadObject);
+    const QByteArray jsonPayload = payloadDocument.toJson(QJsonDocument::Compact);
+
+    QNetworkAccessManager manager;
+    QNetworkRequest request(QUrl(QStringLiteral("http://192.168.43.95/file")));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+
+    QEventLoop loop;
+    QObject::connect(&manager, &QNetworkAccessManager::finished, &loop, &QEventLoop::quit);
+
+    QNetworkReply *reply = manager.post(request, jsonPayload);
+    if (!reply) {
+        qWarning() << "Failed to create network reply for GPX upload";
+    } else {
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        loop.exec();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "Failed to upload GPX to ESP32:" << reply->errorString();
+        } else {
+            qDebug() << "Successfully uploaded GPX path to ESP32";
+        }
+
+        reply->deleteLater();
+    }
 
     const int totalRows = channelGrid.size();
     int totalColumns = 0;
