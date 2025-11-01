@@ -21,6 +21,9 @@
 #include "camera_index.h"
 #include "board_config.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 #if defined(ARDUINO_ARCH_ESP32) && defined(CONFIG_ARDUHAL_ESP_LOG)
 #include "esp32-hal-log.h"
 #endif
@@ -665,6 +668,94 @@ static esp_err_t gps_handler(httpd_req_t *req) {
   return httpd_resp_send(req, payload, len);
 }
 
+static esp_err_t file_upload_handler(httpd_req_t *req) {
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+
+  const size_t total_len = req->content_len;
+  if (total_len == 0) {
+    const char *response = "{\"status\":\"error\",\"message\":\"empty body\"}";
+    return httpd_resp_send(req, response, strlen(response));
+  }
+
+  char *body = (char *)malloc(total_len + 1);
+  if (!body) {
+    return httpd_resp_send_500(req);
+  }
+
+  size_t received = 0;
+  while (received < total_len) {
+    const int ret = httpd_req_recv(req, body + received, total_len - received);
+    if (ret <= 0) {
+      free(body);
+      return httpd_resp_send_500(req);
+    }
+    received += ret;
+  }
+  body[total_len] = '\0';
+
+  const char *marker = "\"content\":\"";
+  const char *start = strstr(body, marker);
+  if (start) {
+    start += strlen(marker);
+    char *decoded = (char *)malloc(total_len + 1);
+    if (decoded) {
+      size_t decoded_index = 0;
+      bool escape = false;
+      for (const char *cursor = start; *cursor != '\0'; ++cursor) {
+        if (!escape && *cursor == '"') {
+          break;
+        }
+
+        if (escape) {
+          switch (*cursor) {
+            case '"':
+              decoded[decoded_index++] = '"';
+              break;
+            case '\\':
+              decoded[decoded_index++] = '\\';
+              break;
+            case 'n':
+              decoded[decoded_index++] = '\n';
+              break;
+            case 'r':
+              decoded[decoded_index++] = '\r';
+              break;
+            case 't':
+              decoded[decoded_index++] = '\t';
+              break;
+            default:
+              decoded[decoded_index++] = *cursor;
+              break;
+          }
+          escape = false;
+          continue;
+        }
+
+        if (*cursor == '\\') {
+          escape = true;
+          continue;
+        }
+
+        decoded[decoded_index++] = *cursor;
+      }
+
+      decoded[decoded_index] = '\0';
+      log_i("Received GPX content:\n%s", decoded);
+      free(decoded);
+    } else {
+      log_w("Failed to allocate buffer for decoded content");
+    }
+  } else {
+    log_w("JSON payload missing content field");
+  }
+
+  free(body);
+
+  const char *response = "{\"status\":\"ok\"}";
+  return httpd_resp_send(req, response, strlen(response));
+}
+
 static esp_err_t index_handler(httpd_req_t *req) {
   httpd_resp_set_type(req, "text/html");
   httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
@@ -843,6 +934,19 @@ void startCameraServer() {
 #endif
   };
 
+  httpd_uri_t file_uri = {
+    .uri = "/file",
+    .method = HTTP_POST,
+    .handler = file_upload_handler,
+    .user_ctx = NULL
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+    ,
+    .is_websocket = true,
+    .handle_ws_control_frames = false,
+    .supported_subprotocol = NULL
+#endif
+  };
+
   ra_filter_init(&ra_filter, 20);
 
   log_i("Starting web server on port: '%d'", config.server_port);
@@ -859,6 +963,7 @@ void startCameraServer() {
     httpd_register_uri_handler(camera_httpd, &pll_uri);
     httpd_register_uri_handler(camera_httpd, &win_uri);
     httpd_register_uri_handler(camera_httpd, &gps_uri);
+    httpd_register_uri_handler(camera_httpd, &file_uri);
   }
 
   config.server_port += 1;
