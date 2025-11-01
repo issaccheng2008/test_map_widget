@@ -16,7 +16,7 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
                    const QVector<QVector<int>> &channelGrid,
                    const Esri::ArcGISRuntime::Point &currentGpsPoint);
 
-Esri::ArcGISRuntime::Point gridCellGpsCoordinate(int row,
+QPair<double,double> gridCellGpsCoordinate(int row,
                                                  int column,
                                                  const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
                                                  int totalRows,

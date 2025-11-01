@@ -46,6 +46,12 @@ bool polygonHasRequiredCorners(const QList<Point> &polygon)
 
 } // namespace
 
+double dis(QPair<double,double> a,QPair<double,double> b){
+    return pow(a.first-b.first,2)+pow(a.second-b.second,2);
+}
+
+
+
 const double car_width = 0.6;
 const double car_length = 1.5;
 const double grid_size = 0.2;
@@ -60,12 +66,49 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
     if (!currentGpsPoint.isEmpty())
         qDebug() << "Current GPS location:" << currentGpsPoint.y() << currentGpsPoint.x();
 
+    const int totalRows = channelGrid.size();
+    const int totalColumns=channelGrid.begin()->size();
+
+    //get starting and ending positions of each row
     QVector<QPair<double, double>> pathCoordinates;
-    pathCoordinates.reserve(4);
-    pathCoordinates.append(QPair<double, double>(0.0, 0.0));
-    pathCoordinates.append(QPair<double, double>(0.0, 10.0));
-    pathCoordinates.append(QPair<double, double>(0.0, 20.0));
-    pathCoordinates.append(QPair<double, double>(10.0, 20.0));
+    QVector<std::array<int, 3>> p;
+    bool ch;
+    for (int i=0;i<totalRows;i++) {
+        ch=0;
+        for (int j=0;j<channelGrid[i].size();j++)
+            if(channelGrid[i][j]>0){
+                ch=1,p.append({i,j,j});
+                break;
+            }
+        if(ch==0) break;
+        for (int j=channelGrid[i].size()-1;j>=0;j--)
+            if(channelGrid[i][j]>0){
+                p.back()[2]=j;
+            }
+    }
+
+    //append current coordinate
+    pathCoordinates.append(QPair<double, double>(currentGpsPoint.x(),currentGpsPoint.y()));
+    if(p.size()==0)return;
+
+    //decide starting row
+    double tt[2][2];
+    for (int i=0;i<=1;i++)
+        tt[0][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.front()[0],p.front()[i],workAreaPolygon,totalRows,totalColumns));
+    for (int i=0;i<=1;i++)
+        tt[1][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.back()[0],p.back()[i],workAreaPolygon,totalRows,totalColumns));
+    if(std::min(tt[0][0],tt[0][1])>std::min(tt[1][0],tt[1][1]))
+        std::reverse(p.begin(),p.end());
+
+    //generate path point
+    QPair<double,double> p1,p2;
+    for (int i=0;i<p.size();i++){
+        p1=gridCellGpsCoordinate(p[i][0],p[i][1],workAreaPolygon,totalRows,totalColumns);
+        p2=gridCellGpsCoordinate(p[i][0],p[i][2],workAreaPolygon,totalRows,totalColumns);
+        if(dis(pathCoordinates.back(),p1)>dis(pathCoordinates.back(),p2))
+            std::swap(p1,p2);
+        pathCoordinates.append(p1),pathCoordinates.append(p2);
+    }
 
     QStringList trackPointLines;
     trackPointLines.reserve(pathCoordinates.size());
@@ -122,26 +165,8 @@ void generate_path(const QList<Esri::ArcGISRuntime::Point> &workAreaPolygon,
 
         reply->deleteLater();
     }
-
-    const int totalRows = channelGrid.size();
-    int totalColumns = 0;
-    for (const QVector<int> &row : channelGrid) {
-        if (!row.isEmpty()) {
-            totalColumns = row.size();
-            break;
-        }
-    }
-
-    // for (int i=0;i<totalRows;i++){
-
-    // }
-    if (polygonHasRequiredCorners(workAreaPolygon) && totalRows > 0 && totalColumns > 0) {
-        const Point example = gridCellGpsCoordinate(0, 10, workAreaPolygon, totalRows, totalColumns);
-        if (!example.isEmpty())
-            qDebug() << "Example grid cell (0,0) center:" << example.x() << example.y();
-    }
 }
-Point gridCellGpsCoordinate(int row,
+QPair<double,double> gridCellGpsCoordinate(int row,
                             int column,
                             const QList<Point> &workAreaPolygon,
                             int totalRows,
@@ -182,6 +207,5 @@ Point gridCellGpsCoordinate(int row,
     const Point webPoint(interpolatedX, interpolatedY, webMercator);
     if (webPoint.isEmpty())
         return {};
-
-    return geometry_cast<Point>(GeometryEngine::project(webPoint, wgs84));
+    return QPair<double,double> (webPoint.x()/1e5,webPoint.y()/1e5);
 }
