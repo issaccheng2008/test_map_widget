@@ -192,6 +192,32 @@ Lon: ---</string>
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QLabel" name="pathProgressLabel">
+            <property name="text">
+             <string>Path Progress</string>
+            </property>
+            <property name="visible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QSlider" name="pathProgressSlider">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="toolTip">
+             <string>Slide to reveal the generated path step by step.</string>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="visible">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
