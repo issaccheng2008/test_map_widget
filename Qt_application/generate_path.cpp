@@ -9,18 +9,12 @@
 #include "SpatialReference.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
-#include <QEventLoop>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
-#include <QObject>
 #include <QLatin1Char>
 #include <QStringList>
-#include <QUrl>
 #include <QVector>
 
 using namespace Esri::ArcGISRuntime;
@@ -73,11 +67,12 @@ struct data{
 
 
 
-QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
-                             const QVector<QVector<int>> &channelGrid,
-                             const Esri::ArcGISRuntime::Point &currentGpsPoint,
-                             QStatusBar *statusBar)
+PathGenerationResult generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
+                                   const QVector<QVector<int>> &channelGrid,
+                                   const Esri::ArcGISRuntime::Point &currentGpsPoint,
+                                   QStatusBar *statusBar)
 {
+    Q_UNUSED(statusBar);
     const int totalRows = channelGrid.size();
     const int totalColumns=channelGrid.begin()->size();
 
@@ -115,7 +110,7 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         return {};
 
     pathCoordinates.append(currentPoint);
-    if(p.size()==0)return pathCoordinates;
+    if(p.size()==0)return {pathCoordinates, QString(), QJsonArray()};
 
     //decide starting row
     double tt[2][2];
@@ -208,53 +203,7 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         pathInfoArray.append(entryObject);
     }
 
-    QNetworkAccessManager manager;
-    QEventLoop loop;
-
-    const auto postPayload = [&](const QJsonObject &payload, const QString &description) {
-        const QJsonDocument payloadDocument(payload);
-        const QByteArray jsonPayload = payloadDocument.toJson(QJsonDocument::Compact);
-
-        QNetworkRequest request(QUrl(kEsp32BaseUrl + QStringLiteral("/file")));
-        request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-
-        QNetworkReply *reply = manager.post(request, jsonPayload);
-        if (!reply) {
-            qWarning() << "Failed to create network reply for" << description;
-            return;
-        }
-
-        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
-
-        if (reply->error() != QNetworkReply::NoError) {
-            const QString errorText = QStringLiteral("Failed to upload %1 to ESP32: %2")
-                                          .arg(description, reply->errorString());
-            qWarning() << errorText;
-            if (statusBar)
-                statusBar->showMessage(errorText, 5000);
-        } else {
-            const QString successText = QStringLiteral("Successfully uploaded %1 to ESP32.").arg(description);
-            if (statusBar)
-                statusBar->showMessage(successText, 5000);
-        }
-
-        reply->deleteLater();
-    };
-
-    QJsonObject gpxPayload;
-    gpxPayload.insert(QStringLiteral("type"), QStringLiteral("file"));
-    gpxPayload.insert(QStringLiteral("content"), gpxDocument);
-    postPayload(gpxPayload, QStringLiteral("GPX path"));
-
-    if (!pathInfoArray.isEmpty()) {
-        QJsonObject pathInfoPayload;
-        pathInfoPayload.insert(QStringLiteral("type"), QStringLiteral("pathinfo"));
-        pathInfoPayload.insert(QStringLiteral("content"), pathInfoArray);
-        postPayload(pathInfoPayload, QStringLiteral("path info"));
-    }
-
-    return pathCoordinates;
+    return {pathCoordinates, gpxDocument, pathInfoArray};
 }
 Point gridCellGpsCoordinate(int row,
                             int column,

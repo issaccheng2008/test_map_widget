@@ -23,11 +23,20 @@
 // Qt headers
 #include <QAbstractScrollArea>
 #include <QColor>
+#include <QDebug>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFuture>
+#include <QEventLoop>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLineEdit>
 #include <QLocale>
+#include <QObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPushButton>
 #include <QPolygonF>
 #include <QRegularExpression>
@@ -138,6 +147,10 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
     if (ui->activateCameraButton)
         connect(ui->activateCameraButton, &QPushButton::clicked, this, &Test_map_widget::openCameraMonitor);
+    if (ui->uploadPathButton) {
+        ui->uploadPathButton->setEnabled(false);
+        connect(ui->uploadPathButton, &QPushButton::clicked, this, &Test_map_widget::uploadPendingPathToEsp32);
+    }
 
     if (ui->pathProgressLabel)
         ui->pathProgressLabel->setVisible(false);
@@ -365,6 +378,7 @@ void Test_map_widget::updatePathGraphics(int segmentsToShow)
 void Test_map_widget::resetPathVisualization()
 {
     m_generatedPathPoints.clear();
+    clearPendingPathUpload();
 
     if (m_graphicsOverlay && m_graphicsOverlay->graphics())
         m_graphicsOverlay->graphics()->clear();
@@ -383,6 +397,16 @@ void Test_map_widget::resetPathVisualization()
 
     if (ui->pathProgressLabel)
         ui->pathProgressLabel->setVisible(false);
+}
+
+void Test_map_widget::clearPendingPathUpload()
+{
+    m_pendingGpxDocument.clear();
+    m_pendingPathInfo = QJsonArray();
+    m_hasPendingPathUpload = false;
+
+    if (ui && ui->uploadPathButton)
+        ui->uploadPathButton->setEnabled(false);
 }
 
 bool Test_map_widget::eventFilter(QObject *watched, QEvent *event)
@@ -978,6 +1002,9 @@ void Test_map_widget::updateUiState()
     if (ui->activateCameraButton)
         ui->activateCameraButton->setEnabled(m_cameraWindow.isNull());
 
+    if (ui->uploadPathButton)
+        ui->uploadPathButton->setEnabled(m_hasPendingPathUpload);
+
     updatePlacementInfoPanel(hasImage, hasPinnedImage);
     updateObstacleControls();
 }
@@ -1327,10 +1354,11 @@ void Test_map_widget::generatePathForCurrentImage()
         return;
     }
 
-    const QVector<Point> pathPoints = generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint, statusBar());
+    const PathGenerationResult pathResult =
+        generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint, statusBar());
 
-    if (pathPoints.size() >= 2 && m_graphicsOverlay && m_graphicsOverlay->graphics()) {
-        m_generatedPathPoints = pathPoints;
+    if (pathResult.hasDrawablePath() && m_graphicsOverlay && m_graphicsOverlay->graphics()) {
+        m_generatedPathPoints = pathResult.pathPoints;
 
         auto *graphicsModel = m_graphicsOverlay->graphics();
         graphicsModel->clear();
@@ -1356,8 +1384,81 @@ void Test_map_widget::generatePathForCurrentImage()
         updatePathGraphics(segmentCount);
     }
 
+    if (pathResult.hasPayload() && pathResult.hasDrawablePath()) {
+        m_pendingGpxDocument = pathResult.gpxDocument;
+        m_pendingPathInfo = pathResult.pathInfoArray;
+        m_hasPendingPathUpload = true;
+    } else {
+        clearPendingPathUpload();
+    }
+
+    updateUiState();
+
     if (QStatusBar *bar = statusBar(); bar && bar->currentMessage().isEmpty())
         bar->showMessage(tr("Path generation requested."), 5000);
+}
+
+void Test_map_widget::uploadPendingPathToEsp32()
+{
+    if (!m_hasPendingPathUpload || m_pendingGpxDocument.isEmpty()) {
+        if (statusBar())
+            statusBar()->showMessage(tr("Generate a path before uploading."), 5000);
+        return;
+    }
+
+    QNetworkAccessManager manager;
+
+    const auto postPayload = [this, &manager](const QJsonObject &payload, const QString &description) {
+        const QJsonDocument payloadDocument(payload);
+        const QByteArray jsonPayload = payloadDocument.toJson(QJsonDocument::Compact);
+
+        QNetworkRequest request(QUrl(kEsp32BaseUrl + QStringLiteral("/file")));
+        request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+
+        QNetworkReply *reply = manager.post(request, jsonPayload);
+        if (!reply) {
+            const QString errorText = tr("Failed to start %1 upload.").arg(description);
+            qWarning() << errorText;
+            if (statusBar())
+                statusBar()->showMessage(errorText, 5000);
+            return false;
+        }
+
+        QEventLoop loop;
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        loop.exec();
+
+        const bool success = reply->error() == QNetworkReply::NoError;
+        if (!success) {
+            const QString errorText = tr("Failed to upload %1 to ESP32: %2").arg(description, reply->errorString());
+            qWarning() << errorText;
+            if (statusBar())
+                statusBar()->showMessage(errorText, 5000);
+        } else {
+            const QString successText = tr("Successfully uploaded %1 to ESP32.").arg(description);
+            if (statusBar())
+                statusBar()->showMessage(successText, 5000);
+        }
+
+        reply->deleteLater();
+        return success;
+    };
+
+    QJsonObject gpxPayload;
+    gpxPayload.insert(QStringLiteral("type"), QStringLiteral("file"));
+    gpxPayload.insert(QStringLiteral("content"), m_pendingGpxDocument);
+    const bool gpxUploaded = postPayload(gpxPayload, tr("GPX path"));
+
+    if (!gpxUploaded)
+        return;
+
+    if (m_pendingPathInfo.isEmpty())
+        return;
+
+    QJsonObject pathInfoPayload;
+    pathInfoPayload.insert(QStringLiteral("type"), QStringLiteral("pathinfo"));
+    pathInfoPayload.insert(QStringLiteral("content"), m_pendingPathInfo);
+    postPayload(pathInfoPayload, tr("path info"));
 }
 
 void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
