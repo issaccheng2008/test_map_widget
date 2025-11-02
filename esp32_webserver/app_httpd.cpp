@@ -860,11 +860,11 @@ static esp_err_t file_upload_handler(httpd_req_t *req) {
         memcpy(content_copy, content_start, length);
         content_copy[length] = '\0';
 #if defined(ARDUINO_ARCH_ESP32)
-        Serial.println(F("Received path info:"));
+        Serial.println(F("Received path info (including heading):"));
         Serial.println(content_copy);
         Serial.flush();
 #else
-        log_i("Received path info:\n%s", content_copy);
+        log_i("Received path info (including heading):\n%s", content_copy);
 #endif
         free(content_copy);
       } else {

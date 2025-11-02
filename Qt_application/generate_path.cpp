@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -39,6 +40,28 @@ bool polygonHasRequiredCorners(const QList<Point> &polygon)
            });
 }
 
+double calculateHeadingBetweenPoints(const Point &from, const Point &to)
+{
+    if (from.isEmpty() || to.isEmpty())
+        return 0.0;
+
+    constexpr double kDegToRad = 0.017453292519943295769; // pi / 180
+    constexpr double kRadToDeg = 57.2957795130823208768;  // 180 / pi
+
+    const double lat1 = from.y() * kDegToRad;
+    const double lat2 = to.y() * kDegToRad;
+    const double deltaLon = (to.x() - from.x()) * kDegToRad;
+
+    const double y = std::sin(deltaLon) * std::cos(lat2);
+    const double x = std::cos(lat1) * std::sin(lat2) - std::sin(lat1) * std::cos(lat2) * std::cos(deltaLon);
+
+    double bearing = std::atan2(y, x) * kRadToDeg;
+    if (bearing < 0.0)
+        bearing += 360.0;
+
+    return bearing;
+}
+
 } // namespace
 
 double dis(const Point &a, const Point &b)
@@ -62,7 +85,8 @@ const QString kEsp32BaseUrl = QStringLiteral("http://192.168.43.95");
 
 struct data{
     Esri::ArcGISRuntime::Point coordinates;
-    int state[7];
+    int state[7]{};
+    double heading = 0.0;
 };
 
 
@@ -139,17 +163,22 @@ PathGenerationResult generate_path(const QList<Esri::ArcGISRuntime::Point> &pinn
         }
         pathCoordinates.append(p1),pathCoordinates.append(p2);
 
+        const double segmentHeading = calculateHeadingBetweenPoints(p1, p2);
+
 //      generate channel release instructions
         for (int j=mini;j<=maxi;j++){
-            channelinfo.append({gridCellGpsCoordinate(r-ad/2,j,pinnedImageCorners,totalRows,totalColumns),{0,0,0,0,0,0,0}});
+            data entry;
+            entry.coordinates = gridCellGpsCoordinate(r-ad/2,j,pinnedImageCorners,totalRows,totalColumns);
+            entry.heading = segmentHeading;
             if(ad<0)
                 for (int k=std::max(r,0);k<=r+6;k++)
-                    channelinfo.back().state[r-k+6]=channelGrid[k][j];
+                    entry.state[r-k+6]=channelGrid[k][j];
             else{
                 for (int k=std::min(totalColumns-1,r);k>=r-6;k--)
-                    channelinfo.back().state[k-r+6]=channelGrid[k][j];
+                    entry.state[k-r+6]=channelGrid[k][j];
             }
-            if(inv)std::reverse(channelinfo.back().state,channelinfo.back().state+6);
+            if(inv)std::reverse(entry.state,entry.state+6);
+            channelinfo.append(entry);
         }
     }
 
@@ -194,6 +223,7 @@ PathGenerationResult generate_path(const QList<Esri::ArcGISRuntime::Point> &pinn
         QJsonObject entryObject;
         entryObject.insert(QStringLiteral("lat"), entry.coordinates.y());
         entryObject.insert(QStringLiteral("lon"), entry.coordinates.x());
+        entryObject.insert(QStringLiteral("heading"), entry.heading);
 
         QJsonArray stateArray;
         for (int i = 0; i < 7; ++i)
