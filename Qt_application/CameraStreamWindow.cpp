@@ -241,8 +241,8 @@ void CameraStreamWindow::handleWorkerStreamStopped(const QString &placeholderTex
         resetPlaceholder(placeholderText);
         return;
     }
-
-    const bool hasPixmap = m_videoLabel->pixmap() && !m_videoLabel->pixmap()->isNull();
+    const QPixmap currentPixmap = m_videoLabel->pixmap(Qt::ReturnByValueConstant::ReturnByValue);
+    const bool hasPixmap = !currentPixmap.isNull();
     if (!hasPixmap && m_videoLabel->text().isEmpty())
         resetPlaceholder(tr("Camera stream stopped."));
 }
