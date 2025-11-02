@@ -75,10 +75,6 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
                              const QVector<QVector<int>> &channelGrid,
                              const Esri::ArcGISRuntime::Point &currentGpsPoint)
 {
-    qDebug() << "generate_path called";
-    if (!currentGpsPoint.isEmpty())
-        qDebug() << "Current GPS location:" << currentGpsPoint.y() << currentGpsPoint.x();
-
     const int totalRows = channelGrid.size();
     const int totalColumns=channelGrid.begin()->size();
 
@@ -172,7 +168,7 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         const double latitude = coordinate.y();
         const double longitude = coordinate.x();
         const QString trackPointLine =
-            QString("      <trkpt lat=\"%1\" lon=\"%2\" />").arg(latitude, 0, 'f', 6).arg(longitude, 0, 'f', 6);
+            QString("      <trkpt lat=\"%1\" lon=\"%2\" />").arg(latitude, 0, 'f', 10).arg(longitude, 0, 'f', 10);
         trackPointLines.append(trackPointLine);
     }
 
@@ -193,7 +189,6 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
     gpxDocument += gpxFooter;
 
     QJsonArray pathInfoArray;
-    pathInfoArray.reserve(channelinfo.size());
     for (const data &entry : channelinfo) {
         if (entry.coordinates.isEmpty())
             continue;
@@ -203,7 +198,6 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         entryObject.insert(QStringLiteral("lon"), entry.coordinates.x());
 
         QJsonArray stateArray;
-        stateArray.reserve(7);
         for (int i = 0; i < 7; ++i)
             stateArray.append(entry.state[i]);
 
