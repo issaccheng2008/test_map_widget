@@ -11,7 +11,7 @@
 #include <QtGlobal>
 
 CameraStreamWindow::CameraStreamWindow(const QUrl &streamUrl, QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent, Qt::Dialog)
     , m_streamUrl(streamUrl)
 {
     setAttribute(Qt::WA_DeleteOnClose, true);
