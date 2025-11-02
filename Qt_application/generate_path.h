@@ -1,9 +1,10 @@
 #ifndef GENERATE_PATH_H
 #define GENERATE_PATH_H
 
+#include <QJsonArray>
 #include <QList>
-#include <QVector>
 #include <QString>
+#include <QVector>
 
 #include "Point.h"
 
@@ -16,10 +17,20 @@ extern const QString kEsp32BaseUrl;
 
 class QStatusBar;
 
-QVector<Esri::ArcGISRuntime::Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
-                                                  const QVector<QVector<int>> &channelGrid,
-                                                  const Esri::ArcGISRuntime::Point &currentGpsPoint,
-                                                  QStatusBar *statusBar = nullptr);
+struct PathGenerationResult
+{
+    QVector<Esri::ArcGISRuntime::Point> pathPoints;
+    QString gpxDocument;
+    QJsonArray pathInfoArray;
+
+    bool hasDrawablePath() const { return pathPoints.size() >= 2; }
+    bool hasPayload() const { return !gpxDocument.isEmpty(); }
+};
+
+PathGenerationResult generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
+                                   const QVector<QVector<int>> &channelGrid,
+                                   const Esri::ArcGISRuntime::Point &currentGpsPoint,
+                                   QStatusBar *statusBar = nullptr);
 
 Esri::ArcGISRuntime::Point gridCellGpsCoordinate(int row,
                                                  int column,

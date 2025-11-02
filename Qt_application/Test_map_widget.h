@@ -20,6 +20,7 @@ class GraphicsOverlay;
 class Graphic;
 } // namespace Esri::ArcGISRuntime
 
+#include <QJsonArray>
 #include <QMainWindow>
 #include <QList>
 #include <QPoint>
@@ -74,6 +75,7 @@ private slots:
     void cancelObstacleCapture();
     void toggleWorkArea();
     void generatePathForCurrentImage();
+    void uploadPendingPathToEsp32();
     void updateGpsCoordinate(double latitude, double longitude);
     void handleGpsError(const QString &message);
     void handlePathProgressChanged(int segmentCount);
@@ -103,6 +105,7 @@ private:
     std::optional<QList<Esri::ArcGISRuntime::Point>> croppedPinnedImageCorners() const;
     void updatePathGraphics(int segmentsToShow);
     void resetPathVisualization();
+    void clearPendingPathUpload();
 
     Esri::ArcGISRuntime::Map *m_map = nullptr;
     Esri::ArcGISRuntime::MapGraphicsView *m_mapView = nullptr;
@@ -134,6 +137,10 @@ private:
 
     QVector<Esri::ArcGISRuntime::Point> m_generatedPathPoints;
     QPointer<CameraStreamWindow> m_cameraWindow;
+
+    QString m_pendingGpxDocument;
+    QJsonArray m_pendingPathInfo;
+    bool m_hasPendingPathUpload = false;
 
     Ui::Test_map_widget *ui = nullptr;
 };
