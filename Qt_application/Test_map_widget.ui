@@ -242,12 +242,28 @@ Lon: ---</string>
            </widget>
           </item>
          </layout>
-        </widget>
-       </item>
-       <item>
-        <spacer name="sideSpacer">
-         <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="monitorGroup">
+        <property name="title">
+         <string>Monitor</string>
+        </property>
+        <layout class="QVBoxLayout" name="monitorLayout">
+         <item>
+          <widget class="QPushButton" name="activateCameraButton">
+           <property name="text">
+            <string>Activate Camera</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <spacer name="sideSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
