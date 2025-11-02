@@ -63,6 +63,13 @@ const double grid_size = 0.2;
 const double max_image_area = 10000.0;
 const int channel_number = 5;
 
+struct data{
+    Esri::ArcGISRuntime::Point coordinates;
+    int state[7];
+};
+
+
+
 QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
                              const QVector<QVector<int>> &channelGrid,
                              const Esri::ArcGISRuntime::Point &currentGpsPoint)
@@ -117,24 +124,44 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
     for (int i=0;i<=1;i++)
         tt[1][i]=dis(pathCoordinates[0],gridCellGpsCoordinate(p.back()[0],p.back()[i],pinnedImageCorners,totalRows,totalColumns));
 
-    int r=-1,ad=6;
+    int r=-1,ad=6,tim;
     if(std::min(tt[0][0],tt[0][1])>std::min(tt[1][0],tt[1][1]))
         std::reverse(p.begin(),p.end()),r=totalColumns,ad=-6;
 
     //generate path point
     Point p1,p2;
+    QVector<data> channelinfo;
 
-    for (int i=0,mini,maxi;i<p.size();i++){
-        r=p[i][0]+ad,mini=totalColumns-1,maxi=0;
+    for (int i=0,mini,maxi,inv;i<p.size();i++){
+        r=p[i][0]+ad,mini=totalColumns-1,maxi=0,tim=1,inv=0;
         for (;i<p.size()&&(ad>0?p[i][0]<=r:p[i][0]>=r);i++)
             mini=std::min(mini,p[i][1]),maxi=std::max(maxi,p[i][2]);
         p1=gridCellGpsCoordinate(r-ad/2,mini,pinnedImageCorners,totalRows,totalColumns);
         p2=gridCellGpsCoordinate(r-ad/2,maxi,pinnedImageCorners,totalRows,totalColumns);
 
-        if(dis(pathCoordinates.back(),p1)>dis(pathCoordinates.back(),p2))
-            std::swap(p1,p2);
+        if(dis(pathCoordinates.back(),p1)>dis(pathCoordinates.back(),p2)){
+            std::swap(p1,p2),inv=1;
+        }
         pathCoordinates.append(p1),pathCoordinates.append(p2);
+
+//      generate channel release instructions
+        for (int j=mini;j<=maxi;j++){
+            channelinfo.append({gridCellGpsCoordinate(r-ad/2,j,pinnedImageCorners,totalRows,totalColumns),{0,0,0,0,0,0,0}});
+            if(ad<0)
+                for (int k=std::max(r,0);k<=r+6;k++)
+                    channelinfo.back().state[r-k+6]=channelGrid[k][j];
+            else{
+                for (int k=std::min(totalColumns-1,r);k>=r-6;k--)
+                    channelinfo.back().state[k-r+6]=channelGrid[k][j];
+            }
+            if(inv)std::reverse(channelinfo.back().state,channelinfo.back().state+6);
+        }
     }
+
+    // for (int i=0;i<channelinfo.size();i++){
+    //     qDebug() << channelinfo[i].coordinates.x() << " " << channelinfo[i].coordinates.y();
+    //     for (int j=0;j<=6;j++)qDebug() << channelinfo[i].state[j];
+    // }
 
     QStringList trackPointLines;
     trackPointLines.reserve(pathCoordinates.size());

@@ -197,11 +197,6 @@ void Test_map_widget::goToCoordinates()
     constexpr double zoomScale = 10000.0;
     m_mapView->setViewpointCenterAsync(location, zoomScale);
     statusBar()->showMessage(tr("Zoomed to %1, %2").arg(latitude, 0, 'f', 4).arg(longitude, 0, 'f', 4), 5000);
-
-    // const Point endlocation(longitude,latitude+1,SpatialReference::wgs84());
-
-    // drawLineBetweenCoordinates(location,endlocation);
-
 }
 
 void Test_map_widget::updateGpsCoordinate(double latitude, double longitude)
@@ -276,7 +271,7 @@ void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point
     if (length == 0.0)
         return;
 
-    const double halfWidthMeters = car_length / 2.0;
+    const double halfWidthMeters = car_length / 4.0;
     const double perpX = (-dy / length) * halfWidthMeters;
     const double perpY = (dx / length) * halfWidthMeters;
 
