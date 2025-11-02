@@ -163,9 +163,13 @@ PathGenerationResult generate_path(const QList<Esri::ArcGISRuntime::Point> &pinn
         }
         pathCoordinates.append(p1),pathCoordinates.append(p2);
 
-        const double segmentHeading = calculateHeadingBetweenPoints(p1, p2);
+        double segmentHeading = calculateHeadingBetweenPoints(p1, p2);
+        //incase p1 and p2 are the same point
+        if(mini==maxi)
+            segmentHeading=calculateHeadingBetweenPoints(gridCellGpsCoordinate(r-ad/2,std::max(0,mini-1),pinnedImageCorners,totalRows,totalColumns),
+                                                           gridCellGpsCoordinate(r-ad/2,std::min(maxi+1,totalColumns-1),pinnedImageCorners,totalRows,totalColumns));
 
-//      generate channel release instructions
+        //generate channel release instructions
         for (int j=mini;j<=maxi;j++){
             data entry;
             entry.coordinates = gridCellGpsCoordinate(r-ad/2,j,pinnedImageCorners,totalRows,totalColumns);
