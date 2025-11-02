@@ -37,6 +37,7 @@ class Graphic;
 class OverlayImageWidget;
 class GridPreviewWindow;
 class GpsNetworkClient;
+class CameraStreamWindow;
 
 namespace Ui {
 class Test_map_widget;
@@ -76,6 +77,8 @@ private slots:
     void updateGpsCoordinate(double latitude, double longitude);
     void handleGpsError(const QString &message);
     void handlePathProgressChanged(int segmentCount);
+    void openCameraMonitor();
+    void handleCameraWindowClosed();
 
 private:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -130,6 +133,7 @@ private:
     GpsNetworkClient *m_gpsClient = nullptr;
 
     QVector<Esri::ArcGISRuntime::Point> m_generatedPathPoints;
+    QPointer<CameraStreamWindow> m_cameraWindow;
 
     Ui::Test_map_widget *ui = nullptr;
 };

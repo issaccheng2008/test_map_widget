@@ -44,6 +44,7 @@ SOURCES += \
     OverlayImageWidget.cpp \
     GridPreviewWindow.cpp \
     generate_path.cpp \
+    CameraStreamWindow.cpp \
     network.cpp
 
 HEADERS += \
@@ -52,6 +53,7 @@ HEADERS += \
     GridPreviewWindow.h \
     GridState.h \
     generate_path.h \
+    CameraStreamWindow.h \
     ImageScalingConstants.h \
     network.h
 

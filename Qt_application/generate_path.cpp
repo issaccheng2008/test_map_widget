@@ -1,6 +1,7 @@
 #include "generate_path.h"
 
 #include <QDebug>
+#include <QStatusBar>
 
 #include "Geometry.h"
 #include "GeometryEngine.h"
@@ -63,6 +64,7 @@ const double car_length = 1.5;
 const double grid_size = 0.2;
 const double max_image_area = 10000.0;
 const int channel_number = 5;
+const QString kEsp32BaseUrl = QStringLiteral("http://192.168.43.95");
 
 struct data{
     Esri::ArcGISRuntime::Point coordinates;
@@ -73,7 +75,8 @@ struct data{
 
 QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImageCorners,
                              const QVector<QVector<int>> &channelGrid,
-                             const Esri::ArcGISRuntime::Point &currentGpsPoint)
+                             const Esri::ArcGISRuntime::Point &currentGpsPoint,
+                             QStatusBar *statusBar)
 {
     const int totalRows = channelGrid.size();
     const int totalColumns=channelGrid.begin()->size();
@@ -212,7 +215,7 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         const QJsonDocument payloadDocument(payload);
         const QByteArray jsonPayload = payloadDocument.toJson(QJsonDocument::Compact);
 
-        QNetworkRequest request(QUrl(QStringLiteral("http://192.168.43.95/file")));
+        QNetworkRequest request(QUrl(kEsp32BaseUrl + QStringLiteral("/file")));
         request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
 
         QNetworkReply *reply = manager.post(request, jsonPayload);
@@ -225,9 +228,15 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
         loop.exec();
 
         if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "Failed to upload" << description << "to ESP32:" << reply->errorString();
+            const QString errorText = QStringLiteral("Failed to upload %1 to ESP32: %2")
+                                          .arg(description, reply->errorString());
+            qWarning() << errorText;
+            if (statusBar)
+                statusBar->showMessage(errorText, 5000);
         } else {
-            qDebug() << "Successfully uploaded" << description << "to ESP32";
+            const QString successText = QStringLiteral("Successfully uploaded %1 to ESP32.").arg(description);
+            if (statusBar)
+                statusBar->showMessage(successText, 5000);
         }
 
         reply->deleteLater();
