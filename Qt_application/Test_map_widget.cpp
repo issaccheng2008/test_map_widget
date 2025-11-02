@@ -13,6 +13,7 @@
 // Other headers
 #include "Test_map_widget.h"
 
+#include "CameraStreamWindow.h"
 #include "OverlayImageWidget.h"
 #include "GridPreviewWindow.h"
 #include "GridState.h"
@@ -135,6 +136,8 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
     connect(ui->generatePathButton, &QPushButton::clicked, this, &Test_map_widget::generatePathForCurrentImage);
     // Connect the exit button created in the UI to close the window
     connect(ui->exitButton, &QPushButton::clicked, this, &QWidget::close);
+    if (ui->activateCameraButton)
+        connect(ui->activateCameraButton, &QPushButton::clicked, this, &Test_map_widget::openCameraMonitor);
 
     if (ui->pathProgressLabel)
         ui->pathProgressLabel->setVisible(false);
@@ -149,7 +152,7 @@ Test_map_widget::Test_map_widget(QWidget *parent /*=nullptr*/)
         connect(ui->pathProgressSlider, &QSlider::valueChanged, this, &Test_map_widget::handlePathProgressChanged);
     }
 
-    m_gpsClient = new GpsNetworkClient(QUrl(QStringLiteral("http://192.168.43.95/gps")), this);
+    m_gpsClient = new GpsNetworkClient(QUrl(kEsp32BaseUrl + QStringLiteral("/gps")), this);
     connect(m_gpsClient, &GpsNetworkClient::coordinateReceived, this, &Test_map_widget::updateGpsCoordinate);
     connect(m_gpsClient, &GpsNetworkClient::networkError, this, &Test_map_widget::handleGpsError);
     m_gpsClient->start(2000);
@@ -243,6 +246,47 @@ void Test_map_widget::handleGpsError(const QString &message)
 void Test_map_widget::handlePathProgressChanged(int segmentCount)
 {
     updatePathGraphics(segmentCount);
+}
+
+void Test_map_widget::openCameraMonitor()
+{
+    if (m_cameraWindow) {
+        if (m_cameraWindow->isVisible()) {
+            m_cameraWindow->raise();
+            m_cameraWindow->activateWindow();
+            return;
+        }
+    }
+
+    const QUrl streamUrl(QStringLiteral("%1:81/stream").arg(kEsp32BaseUrl));
+    auto *cameraWindow = new CameraStreamWindow(streamUrl, this);
+    connect(cameraWindow, &CameraStreamWindow::windowClosed, this, &Test_map_widget::handleCameraWindowClosed);
+    connect(cameraWindow,
+            &CameraStreamWindow::statusMessageRequested,
+            this,
+            [this](const QString &message, int timeoutMs) {
+                if (QStatusBar *bar = statusBar())
+                    bar->showMessage(message, timeoutMs);
+            });
+    m_cameraWindow = cameraWindow;
+    cameraWindow->show();
+    cameraWindow->raise();
+    cameraWindow->activateWindow();
+    if (ui->activateCameraButton)
+        ui->activateCameraButton->setEnabled(false);
+    updateUiState();
+    if (QStatusBar *bar = statusBar())
+        bar->showMessage(tr("Camera monitor activated."), 3000);
+}
+
+void Test_map_widget::handleCameraWindowClosed()
+{
+    if (ui->activateCameraButton)
+        ui->activateCameraButton->setEnabled(true);
+    m_cameraWindow = nullptr;
+    updateUiState();
+    if (QStatusBar *bar = statusBar())
+        bar->showMessage(tr("Camera monitor closed."), 3000);
 }
 
 void Test_map_widget::drawLineBetweenCoordinates(const Point &start, const Point &end)
@@ -931,6 +975,9 @@ void Test_map_widget::updateUiState()
     if (ui->openGridButton)
         ui->openGridButton->setEnabled(hasPinnedImage);
 
+    if (ui->activateCameraButton)
+        ui->activateCameraButton->setEnabled(m_cameraWindow.isNull());
+
     updatePlacementInfoPanel(hasImage, hasPinnedImage);
     updateObstacleControls();
 }
@@ -1280,7 +1327,7 @@ void Test_map_widget::generatePathForCurrentImage()
         return;
     }
 
-    const QVector<Point> pathPoints = generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint);
+    const QVector<Point> pathPoints = generate_path(*croppedCorners, g_channelGrid, m_latestGpsPoint, statusBar());
 
     if (pathPoints.size() >= 2 && m_graphicsOverlay && m_graphicsOverlay->graphics()) {
         m_generatedPathPoints = pathPoints;
@@ -1309,8 +1356,8 @@ void Test_map_widget::generatePathForCurrentImage()
         updatePathGraphics(segmentCount);
     }
 
-    if (statusBar())
-        statusBar()->showMessage(tr("Path generation requested."), 5000);
+    if (QStatusBar *bar = statusBar(); bar && bar->currentMessage().isEmpty())
+        bar->showMessage(tr("Path generation requested."), 5000);
 }
 
 void Test_map_widget::addObstaclePoint(const QPoint &screenPoint)
