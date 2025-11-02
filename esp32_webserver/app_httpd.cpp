@@ -25,6 +25,7 @@
 #include <Arduino.h>
 #endif
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -659,6 +660,32 @@ static esp_err_t win_handler(httpd_req_t *req) {
   return httpd_resp_send(req, NULL, 0);
 }
 
+static const char *skip_whitespace(const char *ptr) {
+  while (ptr && *ptr && isspace((unsigned char)*ptr)) {
+    ++ptr;
+  }
+  return ptr;
+}
+
+static const char *find_json_value_start(const char *body, const char *field_name) {
+  if (!body || !field_name) {
+    return NULL;
+  }
+
+  const char *marker = strstr(body, field_name);
+  if (!marker) {
+    return NULL;
+  }
+
+  marker = strchr(marker, ':');
+  if (!marker) {
+    return NULL;
+  }
+
+  ++marker;
+  return skip_whitespace(marker);
+}
+
 static esp_err_t gps_handler(httpd_req_t *req) {
   httpd_resp_set_type(req, "application/json");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -698,70 +725,159 @@ static esp_err_t file_upload_handler(httpd_req_t *req) {
   }
   body[total_len] = '\0';
 
-  const char *marker = "\"content\":\"";
-  const char *start = strstr(body, marker);
-  if (start) {
-    start += strlen(marker);
-    char *decoded = (char *)malloc(total_len + 1);
-    if (decoded) {
-      size_t decoded_index = 0;
-      bool escape = false;
-      for (const char *cursor = start; *cursor != '\0'; ++cursor) {
-        if (!escape && *cursor == '"') {
-          break;
-        }
-
-        if (escape) {
-          switch (*cursor) {
-            case '"':
-              decoded[decoded_index++] = '"';
-              break;
-            case '\\':
-              decoded[decoded_index++] = '\\';
-              break;
-            case 'n':
-              decoded[decoded_index++] = '\n';
-              break;
-            case 'r':
-              decoded[decoded_index++] = '\r';
-              break;
-            case 't':
-              decoded[decoded_index++] = '\t';
-              break;
-            default:
-              decoded[decoded_index++] = *cursor;
-              break;
-          }
-          escape = false;
-          continue;
-        }
-
-        if (*cursor == '\\') {
-          escape = true;
-          continue;
-        }
-
-        decoded[decoded_index++] = *cursor;
-      }
-
-      decoded[decoded_index] = '\0';
-#if defined(ARDUINO_ARCH_ESP32)
-      Serial.println(F("Received GPX content:"));
-      Serial.println(decoded);
-      Serial.flush();
-#else
-      log_i("Received GPX content:\n%s", decoded);
-#endif
-      free(decoded);
-    } else {
-      log_w("Failed to allocate buffer for decoded content");
+  char type_value[16] = {0};
+  const char *type_start = find_json_value_start(body, "\"type\"");
+  if (type_start && *type_start == '\"') {
+    ++type_start;
+    size_t index = 0;
+    while (*type_start && *type_start != '\"' && index < sizeof(type_value) - 1) {
+      type_value[index++] = *type_start++;
     }
-  } else {
+    type_value[index] = '\0';
+  }
+
+  const char *content_start = find_json_value_start(body, "\"content\"");
+  if (!content_start) {
 #if defined(ARDUINO_ARCH_ESP32)
     Serial.println(F("JSON payload missing content field"));
     Serial.flush();
 #else
     log_w("JSON payload missing content field");
+#endif
+    free(body);
+    const char *response = "{\"status\":\"error\",\"message\":\"missing content\"}";
+    return httpd_resp_send(req, response, strlen(response));
+  }
+
+  const bool treat_as_file = (type_value[0] == '\0') || (strcmp(type_value, "file") == 0);
+  if (treat_as_file) {
+    if (*content_start != '\"') {
+#if defined(ARDUINO_ARCH_ESP32)
+      Serial.println(F("Unexpected content format for file payload"));
+      Serial.flush();
+#else
+      log_w("Unexpected content format for file payload");
+#endif
+    } else {
+      ++content_start;
+      char *decoded = (char *)malloc(total_len + 1);
+      if (decoded) {
+        size_t decoded_index = 0;
+        bool escape = false;
+        for (const char *cursor = content_start; *cursor != '\0'; ++cursor) {
+          if (!escape && *cursor == '\"') {
+            break;
+          }
+
+          if (escape) {
+            switch (*cursor) {
+              case '\"':
+                decoded[decoded_index++] = '\"';
+                break;
+              case '\\':
+                decoded[decoded_index++] = '\\';
+                break;
+              case 'n':
+                decoded[decoded_index++] = '\n';
+                break;
+              case 'r':
+                decoded[decoded_index++] = '\r';
+                break;
+              case 't':
+                decoded[decoded_index++] = '\t';
+                break;
+              default:
+                decoded[decoded_index++] = *cursor;
+                break;
+            }
+            escape = false;
+            continue;
+          }
+
+          if (*cursor == '\\') {
+            escape = true;
+            continue;
+          }
+
+          decoded[decoded_index++] = *cursor;
+        }
+
+        decoded[decoded_index] = '\0';
+#if defined(ARDUINO_ARCH_ESP32)
+        Serial.println(F("Received GPX content:"));
+        Serial.println(decoded);
+        Serial.flush();
+#else
+        log_i("Received GPX content:\n%s", decoded);
+#endif
+        free(decoded);
+      } else {
+        log_w("Failed to allocate buffer for decoded content");
+      }
+    }
+  } else if (strcmp(type_value, "pathinfo") == 0) {
+    if (*content_start != '[') {
+#if defined(ARDUINO_ARCH_ESP32)
+      Serial.println(F("Unexpected content format for path info payload"));
+      Serial.flush();
+#else
+      log_w("Unexpected content format for path info payload");
+#endif
+    } else {
+      const char *cursor = content_start;
+      int bracket_depth = 0;
+      bool in_string = false;
+
+      while (*cursor) {
+        char c = *cursor;
+        if (in_string) {
+          if (c == '\\' && cursor[1] != '\0') {
+            cursor += 2;
+            continue;
+          }
+          if (c == '\"') {
+            in_string = false;
+          }
+        } else {
+          if (c == '\"') {
+            in_string = true;
+          } else if (c == '[') {
+            ++bracket_depth;
+          } else if (c == ']') {
+            --bracket_depth;
+            if (bracket_depth == 0) {
+              ++cursor;
+              break;
+            }
+          }
+        }
+        ++cursor;
+      }
+
+      const size_t length = cursor - content_start;
+      char *content_copy = (char *)malloc(length + 1);
+      if (content_copy) {
+        memcpy(content_copy, content_start, length);
+        content_copy[length] = '\0';
+#if defined(ARDUINO_ARCH_ESP32)
+        Serial.println(F("Received path info:"));
+        Serial.println(content_copy);
+        Serial.flush();
+#else
+        log_i("Received path info:\n%s", content_copy);
+#endif
+        free(content_copy);
+      } else {
+        log_w("Failed to allocate buffer for path info content");
+      }
+    }
+  } else {
+#if defined(ARDUINO_ARCH_ESP32)
+    Serial.print(F("Unknown payload type: "));
+    Serial.println(type_value);
+    Serial.flush();
+#else
+    log_w("Unknown payload type: %s", type_value);
 #endif
   }
 

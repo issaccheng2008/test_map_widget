@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <limits>
 #include <QEventLoop>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -191,35 +192,65 @@ QVector<Point> generate_path(const QList<Esri::ArcGISRuntime::Point> &pinnedImag
     }
     gpxDocument += gpxFooter;
 
-    QJsonObject payloadObject;
-    payloadObject.insert(QStringLiteral("type"), QStringLiteral("file"));
-    payloadObject.insert(QStringLiteral("content"), gpxDocument);
+    QJsonArray pathInfoArray;
+    pathInfoArray.reserve(channelinfo.size());
+    for (const data &entry : channelinfo) {
+        if (entry.coordinates.isEmpty())
+            continue;
 
-    const QJsonDocument payloadDocument(payloadObject);
-    const QByteArray jsonPayload = payloadDocument.toJson(QJsonDocument::Compact);
+        QJsonObject entryObject;
+        entryObject.insert(QStringLiteral("lat"), entry.coordinates.y());
+        entryObject.insert(QStringLiteral("lon"), entry.coordinates.x());
+
+        QJsonArray stateArray;
+        stateArray.reserve(7);
+        for (int i = 0; i < 7; ++i)
+            stateArray.append(entry.state[i]);
+
+        entryObject.insert(QStringLiteral("state"), stateArray);
+        pathInfoArray.append(entryObject);
+    }
 
     QNetworkAccessManager manager;
-    QNetworkRequest request(QUrl(QStringLiteral("http://192.168.43.95/file")));
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-
     QEventLoop loop;
-    QObject::connect(&manager, &QNetworkAccessManager::finished, &loop, &QEventLoop::quit);
 
-    QNetworkReply *reply = manager.post(request, jsonPayload);
-    if (!reply) {
-        qWarning() << "Failed to create network reply for GPX upload";
-    } else {
+    const auto postPayload = [&](const QJsonObject &payload, const QString &description) {
+        const QJsonDocument payloadDocument(payload);
+        const QByteArray jsonPayload = payloadDocument.toJson(QJsonDocument::Compact);
+
+        QNetworkRequest request(QUrl(QStringLiteral("http://192.168.43.95/file")));
+        request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+
+        QNetworkReply *reply = manager.post(request, jsonPayload);
+        if (!reply) {
+            qWarning() << "Failed to create network reply for" << description;
+            return;
+        }
+
         QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
         loop.exec();
 
         if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "Failed to upload GPX to ESP32:" << reply->errorString();
+            qWarning() << "Failed to upload" << description << "to ESP32:" << reply->errorString();
         } else {
-            qDebug() << "Successfully uploaded GPX path to ESP32";
+            qDebug() << "Successfully uploaded" << description << "to ESP32";
         }
 
         reply->deleteLater();
+    };
+
+    QJsonObject gpxPayload;
+    gpxPayload.insert(QStringLiteral("type"), QStringLiteral("file"));
+    gpxPayload.insert(QStringLiteral("content"), gpxDocument);
+    postPayload(gpxPayload, QStringLiteral("GPX path"));
+
+    if (!pathInfoArray.isEmpty()) {
+        QJsonObject pathInfoPayload;
+        pathInfoPayload.insert(QStringLiteral("type"), QStringLiteral("pathinfo"));
+        pathInfoPayload.insert(QStringLiteral("content"), pathInfoArray);
+        postPayload(pathInfoPayload, QStringLiteral("path info"));
     }
+
     return pathCoordinates;
 }
 Point gridCellGpsCoordinate(int row,
