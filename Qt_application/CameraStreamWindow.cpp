@@ -10,73 +10,67 @@
 #include <QSizePolicy>
 #include <QtGlobal>
 
-CameraStreamWindow::CameraStreamWindow(const QUrl &streamUrl, QWidget *parent)
-    : QWidget(parent, Qt::Dialog)
-    , m_streamUrl(streamUrl)
+// CameraStreamWorker implementation
+
+CameraStreamWorker::CameraStreamWorker(QObject *parent)
+    : QObject(parent)
 {
-    setAttribute(Qt::WA_DeleteOnClose, true);
-    setWindowTitle(tr("Camera Monitor"));
-    resize(640, 480);
-
-    auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-
-    m_videoLabel = new QLabel(tr("Connecting to camera..."), this);
-    m_videoLabel->setAlignment(Qt::AlignCenter);
-    m_videoLabel->setMinimumSize(320, 240);
-    m_videoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    layout->addWidget(m_videoLabel);
-
-    startStream();
 }
 
-CameraStreamWindow::~CameraStreamWindow()
+void CameraStreamWorker::startStream(const QUrl &streamUrl)
 {
     stopStream();
-}
 
-void CameraStreamWindow::startStream()
-{
-    stopStream();
+    m_streamUrl = streamUrl;
 
     if (!m_streamUrl.isValid()) {
-        resetPlaceholder(tr("Invalid camera stream URL."));
-        emit statusMessageRequested(tr("Camera stream URL is invalid."), 5000);
+        const QString message = tr("Camera stream URL is invalid.");
+        emit errorOccurred(message);
+        emit statusMessageRequested(message, 5000);
+        emit streamStopped(message);
         return;
     }
+
+    if (!m_networkManager)
+        m_networkManager = new QNetworkAccessManager(this);
 
     QNetworkRequest request(m_streamUrl);
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("TestMapWidget/1.0"));
 
-    m_streamReply = m_networkManager.get(request);
+    m_streamReply = m_networkManager->get(request);
     if (!m_streamReply) {
-        resetPlaceholder(tr("Unable to open camera stream."));
-        emit statusMessageRequested(tr("Unable to connect to camera stream."), 5000);
+        const QString message = tr("Unable to connect to camera stream.");
+        emit errorOccurred(message);
+        emit statusMessageRequested(message, 5000);
+        emit streamStopped(message);
         return;
     }
 
-    connect(m_streamReply, &QNetworkReply::readyRead, this, &CameraStreamWindow::handleReadyRead);
-    connect(m_streamReply, &QNetworkReply::errorOccurred, this, &CameraStreamWindow::handleError);
-    connect(m_streamReply, &QNetworkReply::finished, this, &CameraStreamWindow::handleFinished);
+    connect(m_streamReply, &QNetworkReply::readyRead, this, &CameraStreamWorker::handleReadyRead);
+    connect(m_streamReply, &QNetworkReply::errorOccurred, this, &CameraStreamWorker::handleError);
+    connect(m_streamReply, &QNetworkReply::finished, this, &CameraStreamWorker::handleFinished);
 
+    resetState();
     emit statusMessageRequested(tr("Connecting to camera stream..."), 3000);
 }
 
-void CameraStreamWindow::stopStream()
+void CameraStreamWorker::stopStream(const QString &placeholderText)
 {
-    if (!m_streamReply)
-        return;
+    const bool hadStream = m_streamReply;
 
-    disconnect(m_streamReply, nullptr, this, nullptr);
-    m_streamReply->abort();
-    m_streamReply->deleteLater();
-    m_streamReply = nullptr;
-    m_buffer.clear();
-    m_lastFrame = QPixmap();
-    m_receivedFirstFrame = false;
+    if (m_streamReply) {
+        disconnect(m_streamReply, nullptr, this, nullptr);
+        m_streamReply->abort();
+        m_streamReply->deleteLater();
+        m_streamReply = nullptr;
+    }
+
+    resetState();
+    if (hadStream || !placeholderText.isEmpty())
+        emit streamStopped(placeholderText);
 }
 
-void CameraStreamWindow::handleReadyRead()
+void CameraStreamWorker::handleReadyRead()
 {
     if (!m_streamReply)
         return;
@@ -106,10 +100,7 @@ void CameraStreamWindow::handleReadyRead()
         if (frameImage.isNull())
             continue;
 
-        m_lastFrame = QPixmap::fromImage(frameImage);
-        if (m_videoLabel)
-            m_videoLabel->setText(QString());
-        updateDisplayedPixmap();
+        emit frameReady(frameImage);
 
         if (!m_receivedFirstFrame) {
             m_receivedFirstFrame = true;
@@ -118,27 +109,142 @@ void CameraStreamWindow::handleReadyRead()
     }
 }
 
-void CameraStreamWindow::handleError(QNetworkReply::NetworkError)
+void CameraStreamWorker::handleError(QNetworkReply::NetworkError)
 {
     if (!m_streamReply)
         return;
 
     const QString errorText = tr("Camera stream error: %1").arg(m_streamReply->errorString());
+    emit errorOccurred(errorText);
     emit statusMessageRequested(errorText, 5000);
-    resetPlaceholder(errorText);
+    stopStream();
 }
 
-void CameraStreamWindow::handleFinished()
+void CameraStreamWorker::handleFinished()
 {
     if (!m_streamReply)
         return;
 
-    if (m_streamReply->error() == QNetworkReply::NoError) {
-        resetPlaceholder(tr("Camera stream ended."));
+    const bool finishedCleanly = (m_streamReply->error() == QNetworkReply::NoError);
+    if (finishedCleanly)
         emit statusMessageRequested(tr("Camera stream ended."), 3000);
+
+    stopStream(finishedCleanly ? tr("Camera stream ended.") : QString());
+}
+
+void CameraStreamWorker::resetState()
+{
+    m_buffer.clear();
+    m_receivedFirstFrame = false;
+}
+
+// CameraStreamWindow implementation
+
+CameraStreamWindow::CameraStreamWindow(const QUrl &streamUrl, QWidget *parent)
+    : QWidget(parent, Qt::Dialog)
+    , m_streamUrl(streamUrl)
+{
+    setAttribute(Qt::WA_DeleteOnClose, true);
+    setWindowTitle(tr("Camera Monitor"));
+    resize(640, 480);
+
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    m_videoLabel = new QLabel(tr("Connecting to camera..."), this);
+    m_videoLabel->setAlignment(Qt::AlignCenter);
+    m_videoLabel->setMinimumSize(320, 240);
+    m_videoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layout->addWidget(m_videoLabel);
+
+    m_workerThread = new QThread(this);
+    m_worker = new CameraStreamWorker();
+    m_worker->moveToThread(m_workerThread);
+    connect(m_workerThread, &QThread::finished, m_worker, &QObject::deleteLater);
+    connect(m_worker, &CameraStreamWorker::frameReady, this, &CameraStreamWindow::handleWorkerFrame);
+    connect(m_worker, &CameraStreamWorker::statusMessageRequested, this, &CameraStreamWindow::statusMessageRequested);
+    connect(m_worker, &CameraStreamWorker::errorOccurred, this, &CameraStreamWindow::handleWorkerError);
+    connect(m_worker, &CameraStreamWorker::streamStopped, this, &CameraStreamWindow::handleWorkerStreamStopped);
+    m_workerThread->start();
+
+    startStream();
+}
+
+CameraStreamWindow::~CameraStreamWindow()
+{
+    stopStream();
+
+    if (m_workerThread) {
+        m_workerThread->quit();
+        m_workerThread->wait();
+    }
+}
+
+void CameraStreamWindow::startStream()
+{
+    if (!m_streamUrl.isValid()) {
+        resetPlaceholder(tr("Invalid camera stream URL."));
+        emit statusMessageRequested(tr("Camera stream URL is invalid."), 5000);
+        return;
     }
 
-    stopStream();
+    if (!m_worker) {
+        resetPlaceholder(tr("Camera stream worker unavailable."));
+        emit statusMessageRequested(tr("Unable to start camera stream."), 5000);
+        return;
+    }
+
+    m_lastFrame = QPixmap();
+    resetPlaceholder(tr("Connecting to camera..."));
+    emit statusMessageRequested(tr("Connecting to camera stream..."), 3000);
+    QMetaObject::invokeMethod(m_worker,
+                              "startStream",
+                              Qt::QueuedConnection,
+                              Q_ARG(QUrl, m_streamUrl));
+}
+
+void CameraStreamWindow::stopStream()
+{
+    if (!m_worker)
+        return;
+
+    QMetaObject::invokeMethod(m_worker,
+                              "stopStream",
+                              Qt::QueuedConnection,
+                              Q_ARG(QString, QString()));
+}
+
+void CameraStreamWindow::handleWorkerFrame(const QImage &frame)
+{
+    if (frame.isNull())
+        return;
+
+    m_lastFrame = QPixmap::fromImage(frame);
+    if (m_videoLabel)
+        m_videoLabel->setText(QString());
+    updateDisplayedPixmap();
+}
+
+void CameraStreamWindow::handleWorkerError(const QString &message)
+{
+    m_lastFrame = QPixmap();
+    resetPlaceholder(message);
+}
+
+void CameraStreamWindow::handleWorkerStreamStopped(const QString &placeholderText)
+{
+    if (!m_videoLabel)
+        return;
+
+    if (!placeholderText.isEmpty()) {
+        m_lastFrame = QPixmap();
+        resetPlaceholder(placeholderText);
+        return;
+    }
+
+    const bool hasPixmap = m_videoLabel->pixmap() && !m_videoLabel->pixmap()->isNull();
+    if (!hasPixmap && m_videoLabel->text().isEmpty())
+        resetPlaceholder(tr("Camera stream stopped."));
 }
 
 void CameraStreamWindow::closeEvent(QCloseEvent *event)
